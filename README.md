@@ -24,18 +24,30 @@ model. Do not run against untrusted peers.
 
 ## Quick start
 
+**Prerequisites:** Git, Python 3.11 or newer. No private keys, external
+services, or networked FAW peers are required.
+
+### Run the offline demo
+
 ```bash
-python -m venv .venv && source .venv/bin/activate
+git clone https://github.com/kimeisele/federated-agent-web.git
+cd federated-agent-web
+
+python3 -m venv .venv
+source .venv/bin/activate
+
 python -m pip install --upgrade pip
-python -m pip install -e .
-faw demo                 # fully offline two-node demo
-faw conformance <node-path-or-url>   # verify a node manifest
-faw manifest init --name "My Node" --capabilities hash_file --out ./my-node
+python -m pip install .
+
+faw demo
 ```
 
-Development installation (for running the conformance suite):
+Expected output ends with `demo: OK`.
+
+### Contributor installation
 
 ```bash
+python -m pip install -e .
 python -m pip install --group test
 python -m pytest -q
 ```

@@ -39,6 +39,9 @@ jobs:
       - name: Run offline demo
         run: faw demo
 
+      - name: Verify README clean-clone quick start
+        run: bash scripts/verify_readme_quickstart.sh
+
       - name: Build wheel
         run: python -m pip wheel --no-deps -q . -w dist
 
