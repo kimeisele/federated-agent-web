@@ -1,9 +1,9 @@
 # Nadi compatibility adapter — boundary specification
 
-Status: **experimental, non-normative, transport-only.** Specified, not
-implemented. Implementation is a later v0.4 issue and PR. The v0.4 shared
-transport conformance suite runs against the filesystem adapter; the Nadi
-adapter is added by registering its harness.
+Status: **experimental, non-normative, transport-only.** Implemented behind
+the `Transport` interface; the shared conformance suite runs against both the
+filesystem adapter and the Nadi adapter (stubbed relay). Live GitHub
+rehearsal is a separate, later step.
 
 Purpose: allow a FAW-conforming node to exchange signed documents through the
 existing NADI GitHub-backed relay (`kimeisele/steward-federation`) without

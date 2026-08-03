@@ -22,11 +22,11 @@ python -m pytest -q tests/test_transport_contract.py
 | Transport | Shared contract suite | Live network evidence |
 |---|---:|---:|
 | Filesystem | pass | not applicable |
-| Nadi/GitHub | not implemented | not performed |
+| Nadi/GitHub | pass against stub | not performed |
 
-The suite currently registers exactly one case (`filesystem_transport_case`).
-A future Nadi/GitHub adapter is added by appending its harness to
-`TRANSPORT_CASES` — no shared test changes.
+The suite currently registers two cases (`filesystem_transport_case` and
+`nadi_stub_transport_case`); the same 10 properties run against both —
+20 passing parameterized cases, no shared test changes required.
 
 ## Shared properties
 
