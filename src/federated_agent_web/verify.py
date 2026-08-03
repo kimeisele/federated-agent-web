@@ -93,6 +93,7 @@ class VerificationResult:
     ok: bool = False
     step: int | None = None
     reason: str = ""
+    reason_code: str | None = None
     freshness: str | None = None
     head_sequence: int | None = None
     head_digest: str | None = None
@@ -108,11 +109,13 @@ class VerificationResult:
         return self.freshness == "stale"
 
 
-def _fail(step: int, reason: str, result: VerificationResult) -> VerificationResult:
+def _fail(step: int, reason: str, result: VerificationResult, *, code: str = "") -> VerificationResult:
     result.ok = False
     result.step = step
     result.reason = reason
+    result.reason_code = code or _code_from_step(step, reason)
     return result
+
 
 
 def verify(
@@ -138,13 +141,17 @@ def verify(
     try:
         doc = canonical.parse_strict(document_bytes)
     except canonical.CanonicalizationError as exc:
-        return _fail(1, f"strict parse failed: {exc}", result)
+        code = "parse.duplicate_key" if isinstance(exc, canonical.DuplicateMemberError) else "parse.invalid"
+        return _fail(1, f"strict parse failed: {exc}", result, code=code)
 
     # -- Step 2: expected-kind schema validation ------------------------------
     try:
         validate_document(doc, expected_kind)
     except ValueError as exc:
-        return _fail(2, f"schema validation failed: {exc}", result)
+        msg = str(exc)
+        if "expected_kind" in msg:
+            return _fail(2, f"schema validation failed: {exc}", result, code="document.wrong_kind")
+        return _fail(2, f"schema validation failed: {exc}", result, code="schema.invalid")
 
     body = doc["body"]
     issued_at = parse_timestamp(doc["issued_at"])
@@ -153,7 +160,7 @@ def verify(
     if expected_kind == KIND_DELEGATION:
         if "target_node_id" in body:
             if local_node_id is None or body["target_node_id"] != local_node_id:
-                return _fail(3, "delegation is not addressed to this node", result)
+                return _fail(3, "delegation is not addressed to this node", result, code="delegation.wrong_audience")
         elif "capability_target" in body:
             capability = body["capability_target"]["capability"]
             if local_policy.capability_targets.get(capability) != local_node_id:
@@ -161,9 +168,10 @@ def verify(
                     3,
                     f"capability-addressed target {capability!r} not matched by local policy",
                     result,
+                    code="delegation.wrong_audience",
                 )
         else:  # schema oneOf guarantees one branch; defensive
-            return _fail(3, "delegation has no resolvable target", result)
+            return _fail(3, "delegation has no resolvable target", result, code="delegation.wrong_audience")
 
     # -- Step 4: temporal and structural admission -----------------------------
     if expected_kind == KIND_DELEGATION:
@@ -171,19 +179,19 @@ def verify(
         deadline = parse_timestamp(body["deadline"])
         authority_expiry = parse_timestamp(body["authority"]["expiry"])
         if not (issued_at < expires_at):
-            return _fail(4, "issued_at >= expires_at is rejected", result)
+            return _fail(4, "issued_at >= expires_at is rejected", result, code="time.ordering")
         if expires_at > deadline:
-            return _fail(4, "expires_at > deadline is rejected", result)
+            return _fail(4, "expires_at > deadline is rejected", result, code="time.ordering")
         if authority_expiry < deadline:
-            return _fail(4, "authority.expiry precedes deadline", result)
+            return _fail(4, "authority.expiry precedes deadline", result, code="time.ordering")
         if now > expires_at + _timedelta_seconds(local_policy.clock_skew_seconds):
-            return _fail(4, "delegation expired before admission", result)
+            return _fail(4, "delegation expired before admission", result, code="time.expired")
     elif expected_kind == KIND_RECEIPT:
         if body.get("started_at") is not None:
             if parse_timestamp(body["finished_at"]) < parse_timestamp(body["started_at"]):
-                return _fail(4, "finished_at precedes started_at", result)
+                return _fail(4, "finished_at precedes started_at", result, code="time.ordering")
         if body["executor_node_id"] != doc["issuer"]["node_id"]:
-            return _fail(4, "receipt issuer must be the executor", result)
+            return _fail(4, "receipt issuer must be the executor", result, code="receipt.wrong_issuer")
 
     # -- Step 5: pinned manifest-chain validation and key resolution ------------
     chain_check: ChainValidation = validate_manifest_chain(
@@ -192,7 +200,7 @@ def verify(
         head_digest=trust_context.head_digest,
     )
     if not chain_check.ok:
-        return _fail(5, f"pinned manifest chain invalid: {chain_check.reason}", result)
+        return _fail(5, f"pinned manifest chain invalid: {chain_check.reason}", result, code="trust.chain_invalid")
     public_raw = _resolve_document_key(
         doc, expected_kind, trust_context.chain, issued_at
     )
@@ -202,6 +210,7 @@ def verify(
             f"issuer.kid {doc['issuer']['kid']} not active in pinned chain for "
             f"{doc['issuer']['node_id']} at {doc['issued_at']}",
             result,
+            code="trust.key_unresolved",
         )
     result.resolved_kid = doc["issuer"]["kid"]
 
@@ -213,34 +222,34 @@ def verify(
     result.head_digest = chain_check.head_digest
     if is_stale:
         if local_policy.reject_stale:
-            return _fail(6, "pinned manifest context is stale", result)
+            return _fail(6, "pinned manifest context is stale", result, code="trust.stale")
         result.reason = "stale pinned manifest context (qualified result)"
 
     # -- Step 7: core signature verification ------------------------------------
     canonical_bytes = canonical.canonical_bytes(canonical.strip_signature(doc))
     if not crypto.verify_canonical(canonical_bytes, doc["signature"]["value"], public_raw):
-        return _fail(7, "core signature verification failed", result)
+        return _fail(7, "core signature verification failed", result, code="signature.invalid")
     result.delegation_digest = content_digest_of(doc)
 
     # -- Step 8: document binding (receipts, issuer side) ------------------------
     if expected_kind == KIND_RECEIPT:
         if pending_store is None:
-            return _fail(8, "receipt verification requires a pending_store", result)
+            return _fail(8, "receipt verification requires a pending_store", result, code="receipt.no_pending_store")
         task_id, attempt_id = body["task_id"], body["attempt_id"]
         digest, executor = body["delegation_digest"], body["executor_node_id"]
         record = pending_store.get_outstanding(task_id, attempt_id)
         if record is None:
-            return _fail(8, f"receipt references unknown delegation {task_id}/{attempt_id}", result)
+            return _fail(8, f"receipt references unknown delegation {task_id}/{attempt_id}", result, code="receipt.no_pending_delegation")
         if record.state != "outstanding":
-            return _fail(8, f"delegation {task_id}/{attempt_id} is already {record.state}", result)
+            return _fail(8, f"delegation {task_id}/{attempt_id} is already {record.state}", result, code="receipt.already_terminal")
         if record.delegation_digest != digest:
-            return _fail(8, f"receipt digest {digest} does not match outstanding {record.delegation_digest}", result)
+            return _fail(8, f"receipt digest {digest} does not match outstanding {record.delegation_digest}", result, code="receipt.digest_mismatch")
         if executor != record.target_node_id:
-            return _fail(8, f"receipt executor {executor} != target {record.target_node_id}", result)
+            return _fail(8, f"receipt executor {executor} != target {record.target_node_id}", result, code="receipt.wrong_executor")
         try:
             closed = pending_store.accept_terminal(doc)
         except PendingStoreError as exc:
-            return _fail(8, f"receipt acceptance failed: {exc}", result)
+            return _fail(8, f"receipt acceptance failed: {exc}", result, code="receipt.binding_mismatch")
         result.terminal_receipt = closed.terminal_receipt
         result.ok = True
         result.admitted = True
@@ -259,6 +268,7 @@ def verify(
                     f"attempt {attempt_id} replay digest mismatch: "
                     f"{existing.delegation_digest} != {digest}",
                     result,
+                    code="replay.digest_conflict",
                 )
             result.ok = True
             result.replay_state = existing.state
@@ -271,7 +281,8 @@ def verify(
     if expected_kind == KIND_DELEGATION:
         admission = _evaluate_authority_and_budget(body, local_policy)
         if admission is not None:
-            return _fail(10, admission, result)
+            code = "authority.action_denied" if "action" in admission or "authorized" in admission else "authority.external_effect_denied" if "external" in admission else "budget.unenforceable"
+            return _fail(10, admission, result, code=code)
 
     # -- Step 11: atomic admission (delegations) ---------------------------------
     if expected_kind == KIND_DELEGATION and replay_store is not None:
@@ -280,14 +291,14 @@ def verify(
         except ReplayAlreadyAdmitted as exc:
             existing = exc.record
             if existing.delegation_digest != result.delegation_digest:
-                return _fail(9, "concurrent replay digest mismatch", result)
+                return _fail(9, "concurrent replay digest mismatch", result, code="replay.digest_conflict")
             result.ok = True
             result.replay_state = existing.state
             result.terminal_receipt = existing.receipt
             result.deduplicated = True
             return result
         except ReplayIntegrityViolation as exc:
-            return _fail(9, str(exc), result)
+            return _fail(9, str(exc), result, code="replay.digest_conflict")
         result.replay_state = "pending"
         result.admitted = True
 

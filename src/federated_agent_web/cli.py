@@ -45,6 +45,8 @@ def _load_trust(path: Path) -> PinnedManifestTrustContext:
 
 def _print_result(result: Any, label: str) -> int:
     print(f"{label}: {'OK' if result.ok else 'FAILED'}")
+    if result.reason_code:
+        print(f"  reason_code: {result.reason_code}")
     if result.reason:
         print(f"  reason: {result.reason}")
     if result.step is not None:
