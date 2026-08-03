@@ -20,7 +20,7 @@ import uuid as _uuid
 
 from .demo import CapabilityExecutor
 from .documents import KIND_DELEGATION, KIND_RECEIPT, content_digest_of, now_utc_z
-from .identity import NodeIdentity
+from .identity import NodeIdentity, validate_manifest_chain
 from .pending import PendingDelegationStore
 from .replay import ReplayStore
 from .transports import FilesystemTransport
@@ -34,8 +34,29 @@ __all__ = ["NodeRunner", "run_once"]
 
 
 def _load_peer_trust(peer_dir: Path) -> PinnedManifestTrustContext:
-    identity = NodeIdentity.load(peer_dir)
-    return PinnedManifestTrustContext.from_chain(identity.manifests)
+    """Load a trusted peer's manifest chain from its public state only.
+
+    Reads ``<peer_dir>/node.json``, extracts the manifest chain, validates
+    it with the existing ``validate_manifest_chain()`` mechanism, and returns
+    a ``PinnedManifestTrustContext``. Never reads or requires peer private
+    keys — this is a trust anchor, not a signing identity.
+    """
+    node_path = peer_dir / "node.json"
+    if not node_path.is_file():
+        raise FileNotFoundError(f"{node_path} not found")
+    data = json.loads(node_path.read_text(encoding="utf-8"))
+    manifests: list[dict[str, Any]] = list(data.get("manifests", []))
+    if not manifests:
+        raise ValueError("peer trust: empty or missing manifest chain")
+    chain_check = validate_manifest_chain(manifests)
+    if not chain_check.ok:
+        raise ValueError(f"peer manifest chain invalid: {chain_check.reason}")
+    return PinnedManifestTrustContext(
+        chain=manifests,
+        head_sequence=int(manifests[-1]["body"]["manifest_sequence"]),
+        head_digest=canonical.content_digest(manifests[-1]),
+        pinned_at=datetime.now(timezone.utc),
+    )
 
 
 class NodeRunner:
@@ -82,13 +103,9 @@ class NodeRunner:
     # -- executor ---------------------------------------------------------
 
     def _run_executor(self, envelope: Any) -> int:
-        delegation = canonical.parse_strict(envelope.document_bytes)
-        body = delegation["body"]
-        attempt_id = body["attempt_id"]
-        issuer_id = body["issuer_node_id"]
-
+        raw = envelope.document_bytes
         result = verify(
-            envelope.document_bytes,
+            raw,
             expected_kind=KIND_DELEGATION,
             local_node_id=self.identity.node_id,
             trust_context=self.trust_context,
@@ -103,6 +120,11 @@ class NodeRunner:
             print(f"nack: {reason}")
             return 1
 
+        # Verification succeeded; now safe to parse the validated document.
+        delegation = canonical.parse_strict(raw)
+        body = delegation["body"]
+        attempt_id = body["attempt_id"]
+        issuer_id = body["issuer_node_id"]
         delegation_digest = result.delegation_digest
 
         if result.deduplicated:
@@ -178,10 +200,9 @@ class NodeRunner:
     # -- issuer -----------------------------------------------------------
 
     def _run_issuer(self, envelope: Any) -> int:
-        receipt_doc = canonical.parse_strict(envelope.document_bytes)
-
+        raw = envelope.document_bytes
         result = verify(
-            envelope.document_bytes,
+            raw,
             expected_kind=KIND_RECEIPT,
             local_node_id=self.identity.node_id,
             trust_context=self.trust_context,
@@ -197,6 +218,7 @@ class NodeRunner:
             return 1
 
         self.transport.ack(envelope.message_id)
+        receipt_doc = canonical.parse_strict(raw)
         body = receipt_doc["body"]
         print(f"accepted: receipt {body['receipt_id']} for {body['task_id']}/{body['attempt_id']} ({body['status']})")
         return 0

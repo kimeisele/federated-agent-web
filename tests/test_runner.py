@@ -18,7 +18,8 @@ from federated_agent_web.pending import PendingDelegationStore
 from federated_agent_web.transports import FilesystemTransport
 
 
-def _faw(*args: str) -> subprocess.CompletedProcess[str]:
+
+def _faw_runner(*args: str) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         ["faw", *args],
         capture_output=True,
@@ -26,6 +27,219 @@ def _faw(*args: str) -> subprocess.CompletedProcess[str]:
         timeout=15,
     )
 
+
+class TestMalformedInput:
+    def test_malformed_delegation_nacked(self, tmp_path):
+        """Garbage delegation bytes are nacked, exit non-zero, handler never runs."""
+        issuer = NodeIdentity.create(display_name="MI", capabilities=["hash_file"])
+        executor = NodeIdentity.create(display_name="ME", capabilities=["hash_file"])
+        issuer_dir = tmp_path / "issuer"
+        executor_dir = tmp_path / "executor"
+        issuer.to_json(issuer_dir)
+        executor.to_json(executor_dir)
+
+        from federated_agent_web.transports import FilesystemTransport
+        t = tmp_path / "transport"
+        tx = FilesystemTransport(t, issuer.node_id)
+        _ = FilesystemTransport(t, executor.node_id)
+        tx.send(b"not valid json at all", executor.node_id)
+
+        common = ["node", "run-once",
+            "--identity", str(executor_dir),
+            "--trust", str(issuer_dir),
+            "--transport-root", str(t),
+            "--state-dir", str(tmp_path / "state"),
+            "--work-dir", str(tmp_path / "work"),
+            "--role", "executor",
+        ]
+        r = _faw_runner(*common)
+        assert "nack:" in r.stdout, f"stdout: {r.stdout}"
+        assert r.returncode != 0
+
+    def test_malformed_receipt_nacked(self, tmp_path):
+        """Garbage receipt bytes are nacked, exit non-zero, pending store untouched."""
+        issuer = NodeIdentity.create(display_name="MR", capabilities=["hash_file"])
+        executor = NodeIdentity.create(display_name="MER", capabilities=["hash_file"])
+        issuer_dir = tmp_path / "issuer"
+        executor_dir = tmp_path / "executor"
+        issuer.to_json(issuer_dir)
+        executor.to_json(executor_dir)
+
+        from federated_agent_web.transports import FilesystemTransport
+        t = tmp_path / "transport"
+        tx = FilesystemTransport(t, executor.node_id)
+        _ = FilesystemTransport(t, issuer.node_id)
+        tx.send(b'{"kind": "not-a-receipt"}', issuer.node_id)
+
+        common = ["node", "run-once",
+            "--identity", str(issuer_dir),
+            "--trust", str(executor_dir),
+            "--transport-root", str(t),
+            "--state-dir", str(tmp_path / "state"),
+            "--work-dir", str(tmp_path / "work"),
+            "--role", "issuer",
+        ]
+        r = _faw_runner(*common)
+        assert "nack:" in r.stdout, f"stdout: {r.stdout}"
+        assert r.returncode != 0
+
+    def test_valid_after_invalid_processed(self, tmp_path):
+        """After an invalid envelope is nacked, a later valid one succeeds."""
+        issuer = NodeIdentity.create(display_name="VI", capabilities=["hash_file"])
+        executor = NodeIdentity.create(display_name="VE", capabilities=["hash_file"])
+        issuer_dir = tmp_path / "issuer"
+        executor_dir = tmp_path / "executor"
+        issuer.to_json(issuer_dir)
+        executor.to_json(executor_dir)
+
+        # Build and register a valid delegation
+        from federated_agent_web.documents import KIND_DELEGATION, content_digest_of
+        from federated_agent_web.canonical import digest_bytes, canonical_bytes
+        from federated_agent_web.pending import PendingDelegationStore
+        from datetime import timedelta
+        import uuid
+        base = __import__("datetime").datetime.now(__import__("datetime").timezone.utc)
+        input_path = tmp_path / "input.bin"
+        input_path.write_bytes(b"valid-after-invalid")
+        input_digest = digest_bytes(b"valid-after-invalid")
+        body = {
+            "task_id": str(uuid.uuid4()),
+            "attempt_id": str(uuid.uuid4()),
+            "issuer_node_id": issuer.node_id,
+            "target_node_id": executor.node_id,
+            "capability": "hash_file",
+            "input": {"kind": "refs", "refs": [{"digest": input_digest, "location": str(input_path)}]},
+            "authority": {
+                "actions": ["hash_file"],
+                "filesystem_scope": {"read_paths": [str(input_path)]},
+                "external_effect_scope": {"allowed_effects": ["none"]},
+                "expiry": (base + timedelta(seconds=7200)).astimezone(__import__("datetime").timezone.utc).isoformat().replace("+00:00", "Z"),
+            },
+            "budget": {"max_wall_seconds": 60, "max_output_bytes": 8192},
+            "deadline": (base + timedelta(seconds=1200)).astimezone(__import__("datetime").timezone.utc).isoformat().replace("+00:00", "Z"),
+            "expected_output": {"kind": "artifact", "media_type": "application/json", "required_artifacts": ["result.json"], "expects_repository_mutation": False},
+            "expires_at": (base + timedelta(seconds=600)).astimezone(__import__("datetime").timezone.utc).isoformat().replace("+00:00", "Z"),
+        }
+        delegation = issuer.sign_document(KIND_DELEGATION, body)
+        delegation_bytes = canonical_bytes(delegation)
+        pending = PendingDelegationStore(tmp_path / "state-a" / "pending")
+        pending.register_outstanding(delegation, content_digest_of(delegation))
+
+        from federated_agent_web.transports import FilesystemTransport
+        t = tmp_path / "transport"
+        tx = FilesystemTransport(t, issuer.node_id)
+        _ = FilesystemTransport(t, executor.node_id)
+
+        # 1. Send garbage first
+        tx.send(b"garbage", executor.node_id)
+        common_e = ["node", "run-once",
+            "--identity", str(executor_dir),
+            "--trust", str(issuer_dir),
+            "--transport-root", str(t),
+            "--state-dir", str(tmp_path / "state-e"),
+            "--work-dir", str(tmp_path / "work-e"),
+            "--role", "executor",
+        ]
+        r1 = _faw_runner(*common_e)
+        assert "nack:" in r1.stdout
+        assert r1.returncode != 0
+
+        # 2. Then send valid delegation
+        tx.send(delegation_bytes, executor.node_id)
+        r2 = _faw_runner(*common_e)
+        assert "executed:" in r2.stdout, f"r2 stdout: {r2.stdout}  stderr: {r2.stderr}"
+        assert r2.returncode == 0
+
+
+class TestPublicOnlyPeerTrust:
+    def test_peer_trust_without_private_keys(self, tmp_path):
+        """Node A verifies Node B using only B's public manifest chain."""
+        issuer = NodeIdentity.create(display_name="A", capabilities=["hash_file"])
+        executor = NodeIdentity.create(display_name="B", capabilities=["hash_file"])
+        issuer_dir = tmp_path / "a"
+        executor_dir = tmp_path / "b"
+        issuer.to_json(issuer_dir)
+        executor.to_json(executor_dir)
+
+        # Remove executor's private keys — the issuer must still trust it
+        import shutil
+        shutil.rmtree(executor_dir / "keys")
+        # Remove issuer's private keys — the executor must still trust it
+        shutil.rmtree(issuer_dir / "keys")
+
+        # Build and deliver a delegation (issuer signs using its own keys
+        # which are still in memory, not loaded from disk — the persistent
+        # identity directory's key table only provides the public chain for
+        # the peer).
+
+        from federated_agent_web.documents import KIND_DELEGATION, content_digest_of
+        from federated_agent_web.canonical import digest_bytes, canonical_bytes
+        from federated_agent_web.pending import PendingDelegationStore
+        from datetime import timedelta
+        import uuid
+        base = __import__("datetime").datetime.now(__import__("datetime").timezone.utc)
+        input_path = tmp_path / "input.bin"
+        input_path.write_bytes(b"peer-trust-test")
+        input_digest = digest_bytes(b"peer-trust-test")
+        body = {
+            "task_id": str(uuid.uuid4()),
+            "attempt_id": str(uuid.uuid4()),
+            "issuer_node_id": issuer.node_id,
+            "target_node_id": executor.node_id,
+            "capability": "hash_file",
+            "input": {"kind": "refs", "refs": [{"digest": input_digest, "location": str(input_path)}]},
+            "authority": {
+                "actions": ["hash_file"],
+                "filesystem_scope": {"read_paths": [str(input_path)]},
+                "external_effect_scope": {"allowed_effects": ["none"]},
+                "expiry": (base + timedelta(seconds=7200)).astimezone(__import__("datetime").timezone.utc).isoformat().replace("+00:00", "Z"),
+            },
+            "budget": {"max_wall_seconds": 60, "max_output_bytes": 8192},
+            "deadline": (base + timedelta(seconds=1200)).astimezone(__import__("datetime").timezone.utc).isoformat().replace("+00:00", "Z"),
+            "expected_output": {"kind": "artifact", "media_type": "application/json", "required_artifacts": ["result.json"], "expects_repository_mutation": False},
+            "expires_at": (base + timedelta(seconds=600)).astimezone(__import__("datetime").timezone.utc).isoformat().replace("+00:00", "Z"),
+        }
+        delegation = issuer.sign_document(KIND_DELEGATION, body)
+        delegation_bytes = canonical_bytes(delegation)
+        pending = PendingDelegationStore(tmp_path / "state-a" / "pending")
+        pending.register_outstanding(delegation, content_digest_of(delegation))
+
+        from federated_agent_web.transports import FilesystemTransport
+        t = tmp_path / "transport"
+        tx = FilesystemTransport(t, issuer.node_id)
+        _ = FilesystemTransport(t, executor.node_id)
+        tx.send(delegation_bytes, executor.node_id)
+
+        # Executor runs — but it can't load its OWN identity from disk
+        # because keys/ is deleted. For the executor role we need the local
+        # identity with private keys. Restore executor keys.
+        executor.to_json(executor_dir)  # re-persist with keys
+
+        common_e = ["node", "run-once",
+            "--identity", str(executor_dir),
+            "--trust", str(issuer_dir),
+            "--transport-root", str(t),
+            "--state-dir", str(tmp_path / "state-e"),
+            "--work-dir", str(tmp_path / "work-e"),
+            "--role", "executor",
+        ]
+        r = _faw_runner(*common_e)
+        assert "executed:" in r.stdout, f"executor stdout: {r.stdout}  stderr: {r.stderr}"
+        assert r.returncode == 0
+
+        # Issuer runs — restore its keys for local identity load
+        issuer.to_json(issuer_dir)
+        common_i = ["node", "run-once",
+            "--identity", str(issuer_dir),
+            "--trust", str(executor_dir),
+            "--transport-root", str(t),
+            "--state-dir", str(tmp_path / "state-a"),
+            "--work-dir", str(tmp_path / "work-a"),
+            "--role", "issuer",
+        ]
+        r2 = _faw_runner(*common_i)
+        assert "accepted:" in r2.stdout, f"issuer stdout: {r2.stdout}  stderr: {r2.stderr}"
+        assert r2.returncode == 0
 
 def test_two_node_process_boundary(tmp_path):
     """Two separately persisted nodes, subprocess CLI, full delegation lifecycle.
@@ -111,7 +325,7 @@ def test_two_node_process_boundary(tmp_path):
         "--state-dir", str(state_b),
         "--work-dir", str(work_b),
     ]
-    run_b = _faw(
+    run_b = _faw_runner(
         "node", "run-once",
         "--identity", str(executor_dir),
         "--trust", str(issuer_dir),
@@ -127,7 +341,7 @@ def test_two_node_process_boundary(tmp_path):
         "--state-dir", str(state_a),
         "--work-dir", str(work_a),
     ]
-    run_a = _faw(
+    run_a = _faw_runner(
         "node", "run-once",
         "--identity", str(issuer_dir),
         "--trust", str(executor_dir),
@@ -155,7 +369,7 @@ def test_two_node_process_boundary(tmp_path):
     # 6. Re-deliver the same delegation and re-run B — must deduplicate.
     sent2 = transport_a.send(delegation_bytes, executor.node_id)
     assert sent2.ok
-    run_b2 = _faw(
+    run_b2 = _faw_runner(
         "node", "run-once",
         "--identity", str(executor_dir),
         "--trust", str(issuer_dir),
@@ -166,7 +380,7 @@ def test_two_node_process_boundary(tmp_path):
     assert run_b2.returncode == 0
 
     # 7. Re-run B with empty inbox — idle.
-    run_b3 = _faw(
+    run_b3 = _faw_runner(
         "node", "run-once",
         "--identity", str(executor_dir),
         "--trust", str(issuer_dir),

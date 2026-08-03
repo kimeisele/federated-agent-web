@@ -1,4 +1,4 @@
-{% raw %}name: CI
+name: CI
 
 on:
   push:
@@ -35,4 +35,3 @@ jobs:
           python -m venv /tmp/faw-wheel-test
           /tmp/faw-wheel-test/bin/pip install dist/*.whl
           /tmp/faw-wheel-test/bin/faw demo
-{% endraw %}
