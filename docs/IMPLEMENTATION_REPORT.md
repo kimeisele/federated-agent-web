@@ -123,9 +123,11 @@ trust.
 
 ## 7. Independent review
 
-An automated independent review was attempted twice during the build (a
-`reviewer` and a `scout` subagent) and both attempts were blocked by the
-provider's monthly usage limit (`429 GoUsageLimitError`, resets ~2026-08-04).
+An automated independent review was attempted three times during the build
+(two `reviewer` agents and a `scout` agent, the final attempt on a
+"deepseek pro" reviewer configuration) and every attempt was blocked by the
+provider's monthly usage limit (`429 GoUsageLimitError`, resets
+~2026-08-04 06:00 UTC). No alternative model backend was available either.
 Instead, a manual adversarial review pass was performed over the §18
 categories. Two findings were found and fixed before publication:
 
