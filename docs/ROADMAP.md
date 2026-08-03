@@ -2,7 +2,7 @@
 
 **What 1.0 means here:** the wire format is frozen and we promise not to break implementations built against it. That promise is only credible once someone other than us has implemented it. So this roadmap is organized around *external evidence*, not feature count.
 
-**Current state:** spec v0.2 frozen, reference core on `main`, CI green.
+**Current state:** spec v0.2 frozen, reference core on `main`, CI green; v0.3 hardening gate complete at `main` commit `0608207`; v0.4 transport-boundary work begun.
 
 ## Decisions already taken
 
