@@ -1,0 +1,38 @@
+{% raw %}name: CI
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Install package (editable)
+        run: pip install -e .
+
+      - name: Run conformance tests
+        run: python -m pytest -q
+
+      - name: Run offline demo
+        run: faw demo
+
+      - name: Build wheel
+        run: python -m pip wheel --no-deps -q . -w dist
+
+      - name: Wheel smoke test
+        run: |
+          python -m venv /tmp/faw-wheel-test
+          /tmp/faw-wheel-test/bin/pip install dist/*.whl
+          /tmp/faw-wheel-test/bin/faw demo
+{% endraw %}

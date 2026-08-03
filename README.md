@@ -38,6 +38,42 @@ Run the conformance suite offline:
 pytest -q
 ```
 
+### Operational one-shot node
+
+> **experimental / laboratory reference implementation**
+
+Persist a node, then run it as a one-shot executor or issuer against the
+filesystem transport:
+
+```bash
+# Create and persist a node identity
+faw manifest init --name "My Node" --capabilities hash_file --out ./my-node
+
+# Run once as executor: process one delegated task and exit
+faw node run-once \
+  --identity ./my-node \
+  --trust ./peer-node \
+  --transport-root ./transport \
+  --state-dir ./state \
+  --work-dir ./work \
+  --role executor
+
+# Run once as issuer: accept one terminal receipt and exit
+faw node run-once \
+  --identity ./my-node \
+  --trust ./peer-node \
+  --transport-root ./transport \
+  --state-dir ./state \
+  --work-dir ./work \
+  --role issuer
+```
+
+Each invocation processes at most one inbound envelope and exits. State is
+persisted across restarts (replay store, pending-delegation store).
+`hash_file` is the only executable capability. No daemon, no HTTP server,
+no endless loop.
+
+
 ## Repository layout
 
 ```text
