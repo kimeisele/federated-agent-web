@@ -4,7 +4,15 @@ Status: **complete** (all §17 definition-of-done items met except the
 independent-review item, see §7 below). Build date: 2026-08-03.
 
 Remote: `https://github.com/kimeisele/federated-agent-web` (public, `main`)
-Pushed commit: `8545e10b23012e68fec6c0e730c45330fcea957e`
+Pushed at build time: `8545e10b23012e68fec6c0e730c45330fcea957e`
+
+Publication history (all on `main`, in order):
+
+| Commit | Content |
+|---|---|
+| `303d315ba9563a03a277ed018f3e00eeb52e7fe1` | Core, schemas, CLI, demo, vectors, tests (initial publish) |
+| `8545e10b23012e68fec6c0e730c45330fcea957e` | Implementation report; executor filesystem-scope + concrete-target registration hardening |
+| `abcb4c88c96cb3c4d3e1451d8ddb2407bc4fd5a1` | Normative schemas bundled into wheels |
 
 ## 1. Files created
 
