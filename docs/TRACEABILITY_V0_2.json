@@ -1,0 +1,386 @@
+{
+  "spec_file": "docs/federated-agent-web-build-spec-v0.2.md",
+  "spec_version": "0.2",
+  "requirements": [
+    {
+      "id": "FAW-V02-6-001",
+      "section": "6. Normative document model",
+      "source_text": "`issuer.kid` is the sole key identifier carried by a signed document. It identifies a specific public key and is derived as `sha256:<hex>` over the raw 32-byte Ed25519 public key. The resolved key MUST be an active key in the pinned manifest chain for `issuer.node_id` at the relevant document time.",
+      "summary": "issuer.kid is the sole key identifier; the resolved key must be active in the pinned chain at document time.",
+      "implementation": [
+        "src/federated_agent_web/crypto.py",
+        "src/federated_agent_web/verify.py",
+        "src/federated_agent_web/identity.py"
+      ],
+      "tests": [
+        "tests/test_signatures.py::TestSignatureVerification::test_unknown_key_fails",
+        "tests/test_signatures.py::TestSignatureVerification::test_kid_not_active_fails",
+        "tests/test_signatures.py::TestSignatureVerification::test_revoked_key_fails"
+      ],
+      "evidence_class": "runtime verification",
+      "status": "covered"
+    },
+    {
+      "id": "FAW-V02-6-002",
+      "section": "Identifier grammar",
+      "source_text": "Normative identifiers are ASCII-only and schemas MUST enforce these patterns:",
+      "summary": "All normative identifiers are ASCII-only with schema-enforced patterns.",
+      "implementation": [
+        "schemas/node-manifest.schema.json",
+        "schemas/delegation.schema.json",
+        "schemas/receipt.schema.json"
+      ],
+      "tests": [
+        "tests/test_schemas.py::TestIdentifierGrammar::test_invalid_node_id_rejected[not-a-urn]",
+        "tests/test_schemas.py::TestIdentifierGrammar::test_invalid_capability_rejected_in_manifest[Hash_File]",
+        "tests/test_schemas.py::TestIdentifierGrammar::test_invalid_kid_pattern_rejected",
+        "tests/test_schemas.py::TestIdentifierGrammar::test_invalid_uuid_rejected[not-a-uuid]"
+      ],
+      "evidence_class": "schema enforcement",
+      "status": "covered"
+    },
+    {
+      "id": "FAW-V02-6-003",
+      "section": "Identifier grammar",
+      "source_text": "every other schema property named `id` or ending in `_id` MUST declare an explicit ASCII `pattern` appropriate to its semantic type; no identifier field may remain an unconstrained JSON string. Where no stronger semantic form exists, use the generic token grammar `^[A-Za-z0-9][A-Za-z0-9._:-]{0,127}$`.",
+      "summary": "Every id/_id schema property declares an explicit ASCII pattern.",
+      "implementation": [
+        "schemas/node-manifest.schema.json",
+        "schemas/delegation.schema.json",
+        "schemas/receipt.schema.json"
+      ],
+      "tests": [
+        "tests/test_schemas.py::TestIdentifierGrammar::test_invalid_digest_rejected_in_delegation"
+      ],
+      "evidence_class": "schema enforcement",
+      "status": "covered"
+    },
+    {
+      "id": "FAW-V02-6-004",
+      "section": "Closed schemas and versioned extension",
+      "source_text": "Every object in the three normative schemas MUST set `additionalProperties: false`, including at minimum the document envelope, `issuer`, `body`, `authority`, `budget`, `signature`, artifact entries, and node-manifest key entries. An ignored unknown member that narrows or extends authority semantics would be a silent semantic downgrade under a valid signature.",
+      "summary": "All normative objects are closed; unknown members are rejected.",
+      "implementation": [
+        "schemas/node-manifest.schema.json",
+        "schemas/delegation.schema.json",
+        "schemas/receipt.schema.json"
+      ],
+      "tests": [
+        "tests/test_schemas.py::TestClosedSchemas::test_envelope_rejects_unknown_members[faw-node-manifest]",
+        "tests/test_schemas.py::TestClosedSchemas::test_authority_rejects_unknown_members",
+        "tests/test_schemas.py::TestClosedSchemas::test_budget_rejects_unknown_members",
+        "tests/test_schemas.py::TestClosedSchemas::test_artifact_entries_reject_unknown_members",
+        "tests/test_schemas.py::TestClosedSchemas::test_manifest_key_entries_reject_unknown_members"
+      ],
+      "evidence_class": "schema enforcement",
+      "status": "covered"
+    },
+    {
+      "id": "FAW-V02-6-005",
+      "section": "Closed schemas and versioned extension",
+      "source_text": "Each schema MUST declare its document `kind` using JSON Schema `const` and `spec_version` using an `enum` containing only `\"0.2\"`.",
+      "summary": "Each schema declares kind as const and spec_version as an enum containing only 0.2.",
+      "implementation": [
+        "schemas/node-manifest.schema.json",
+        "schemas/delegation.schema.json",
+        "schemas/receipt.schema.json"
+      ],
+      "tests": [
+        "tests/test_schemas.py::TestKindAndVersion::test_kind_must_be_const",
+        "tests/test_schemas.py::TestKindAndVersion::test_unsupported_spec_version_rejected"
+      ],
+      "evidence_class": "schema enforcement",
+      "status": "covered"
+    },
+    {
+      "id": "FAW-V02-6-006",
+      "section": "Closed schemas and versioned extension",
+      "source_text": "Forward extension occurs through a `spec_version` bump. A future version may define a namespaced `extensions` object, but that object is explicitly non-authority-bearing and MUST NOT affect admission, target selection, authority, budget, deadline, or external-effect evaluation. No `extensions` member is accepted by the v0.2 schemas.",
+      "summary": "Extension requires a version bump; no extensions member is accepted by v0.2 schemas.",
+      "implementation": [
+        "schemas/delegation.schema.json",
+        "schemas/node-manifest.schema.json",
+        "schemas/receipt.schema.json"
+      ],
+      "tests": [
+        "tests/test_schemas.py::TestClosedSchemas::test_envelope_rejects_unknown_members[faw-node-manifest]"
+      ],
+      "evidence_class": "schema enforcement",
+      "status": "covered"
+    },
+    {
+      "id": "FAW-V02-7-001",
+      "section": "7.2 Signing input",
+      "source_text": "Each schema includes a `kind` declared as `const` and a `spec_version` declared as the supported-version `enum` in the signed content. The verification API takes the expected document kind as an explicit parameter and MUST NOT infer it from untrusted input.",
+      "summary": "expected_kind is an explicit trusted parameter; never inferred from input.",
+      "implementation": [
+        "src/federated_agent_web/documents.py",
+        "src/federated_agent_web/verify.py"
+      ],
+      "tests": [
+        "tests/test_schemas.py::TestKindAndVersion::test_kind_mismatch_rejected",
+        "tests/test_rejection_codes.py::TestDocumentCodes::test_wrong_kind"
+      ],
+      "evidence_class": "runtime verification",
+      "status": "covered"
+    },
+    {
+      "id": "FAW-V02-7-002",
+      "section": "7.3 Normative verification procedure",
+      "source_text": "The following order is authoritative. A later step MUST NOT execute, and no capability handler, artifact consumer, repository mutation, or other external effect may occur, until every applicable earlier step has passed:",
+      "summary": "The 11-step verification order is authoritative; later steps never execute after an earlier failure.",
+      "implementation": [
+        "src/federated_agent_web/verify.py"
+      ],
+      "tests": [
+        "tests/test_delegation.py::TestDelegationAdmission::test_relayed_delegation_rejected_before_key_resolution",
+        "tests/test_signatures.py::TestSignatureVerification::test_changed_kind_fails",
+        "tests/test_rejection_codes.py::TestParseCodes::test_parse_duplicate_key"
+      ],
+      "evidence_class": "runtime verification",
+      "status": "covered"
+    },
+    {
+      "id": "FAW-V02-7-003",
+      "section": "7.3 Normative verification procedure",
+      "source_text": "**Audience binding.** For a delegation, assert that `local_node_id` is the addressed `target_node_id`, or that the capability-addressed target matches this node under explicit local policy. A document failing this step MUST never reach later steps. This fail-closed check may inspect unverified content only to reject; it can never cause acceptance or dispatch.",
+      "summary": "Delegations failing audience binding never reach later verification steps.",
+      "implementation": [
+        "src/federated_agent_web/verify.py"
+      ],
+      "tests": [
+        "tests/test_delegation.py::TestDelegationAdmission::test_relayed_delegation_rejected_before_key_resolution",
+        "tests/test_delegation.py::TestDelegationAdmission::test_capability_addressed_requires_explicit_policy"
+      ],
+      "evidence_class": "runtime verification",
+      "status": "covered"
+    },
+    {
+      "id": "FAW-V02-7-004",
+      "section": "7.3 Normative verification procedure",
+      "source_text": "**Pinned manifest-chain validation and key resolution.** Validate the locally supplied chain's monotonic sequence, digest links, and every manifest signature according to \u00a78, starting from the locally approved trust anchor. Resolve `issuer.kid` only within the chain for `issuer.node_id`. The resolved Ed25519 key MUST be active and valid for the document's issuance time. No `signature.kid` exists and no key identifier may be taken from outside the signed content and supplied trust context.",
+      "summary": "Chain validation and time-bound key resolution from the locally approved anchor.",
+      "implementation": [
+        "src/federated_agent_web/identity.py",
+        "src/federated_agent_web/verify.py"
+      ],
+      "tests": [
+        "tests/test_signatures.py::TestKeyRotation::test_broken_chain_fails",
+        "tests/test_signatures.py::TestKeyRotation::test_rotation_continuity_passes",
+        "tests/test_rejection_codes.py::TestTrustCodes::test_chain_invalid"
+      ],
+      "evidence_class": "runtime verification",
+      "status": "covered"
+    },
+    {
+      "id": "FAW-V02-7-005",
+      "section": "7.3 Normative verification procedure",
+      "source_text": "**Revocation and trust-context freshness.** Enforce retired/revoked status against the supplied pinned manifest state. Revocation checking is therefore best-effort within the latest manifest's declared `manifest_freshness_window_seconds`; it is not an online freshness guarantee. The verifier MUST classify the trust context as `fresh` or `stale`, MUST expose the pinned head sequence and digest in `VerificationResult`, and SHOULD record the manifest sequence and digest in downstream evidence. A stale context may be rejected by local policy or returned as a qualified verification result, but it MUST NOT silently produce an unqualified pass.",
+      "summary": "Freshness is classified and exposed; a stale context never silently passes.",
+      "implementation": [
+        "src/federated_agent_web/verify.py"
+      ],
+      "tests": [
+        "tests/test_signatures.py::TestFreshness::test_stale_context_reports_stale_with_head",
+        "tests/test_signatures.py::TestFreshness::test_reject_stale_policy_fails",
+        "tests/test_coverage.py::TestVerifyMissingBranches::test_stale_allowed_qualified_pass"
+      ],
+      "evidence_class": "runtime verification",
+      "status": "covered"
+    },
+    {
+      "id": "FAW-V02-7-006",
+      "section": "7.3 Normative verification procedure",
+      "source_text": "**Document binding.** For a receipt, use the issuer-side `PendingDelegationStore` from \u00a711. The issuer MUST match `delegation_digest` against a delegation it issued and still holds outstanding, MUST verify `task_id` and `attempt_id` against that record, and MUST verify `executor_node_id` equals that delegation's `target_node_id`. Unknown, non-outstanding, mismatched, or already-terminal delegations are rejected.",
+      "summary": "Receipts bind to outstanding delegations via the issuer pending store.",
+      "implementation": [
+        "src/federated_agent_web/verify.py",
+        "src/federated_agent_web/pending.py"
+      ],
+      "tests": [
+        "tests/test_delegation.py::TestReceiptBinding::test_receipt_binds_to_exact_delegation",
+        "tests/test_delegation.py::TestReceiptBinding::test_receipt_with_wrong_digest_rejected",
+        "tests/test_delegation.py::TestReceiptBinding::test_receipt_from_non_target_executor_rejected",
+        "tests/test_delegation.py::TestReceiptBinding::test_second_terminal_receipt_rejected"
+      ],
+      "evidence_class": "runtime verification",
+      "status": "covered"
+    },
+    {
+      "id": "FAW-V02-8-001",
+      "section": "8. Node manifest",
+      "source_text": "The template's legacy `.well-known/agent-federation.json` is not the FAW manifest and MUST NOT be renamed, copied, redirected, or aliased to the reserved FAW path.",
+      "summary": "The legacy agent-federation.json is never aliased to the FAW manifest path.",
+      "implementation": [
+        "src/federated_agent_web/cli.py"
+      ],
+      "tests": [
+        "tests/test_schemas.py::TestManifestPaths::test_legacy_agent_federation_json_rejected_as_substitute",
+        "tests/test_schemas.py::TestManifestPaths::test_faw_manifest_discovered_at_well_known_path"
+      ],
+      "evidence_class": "CLI behavior",
+      "status": "covered"
+    },
+    {
+      "id": "FAW-V02-9-001",
+      "section": "9. Delegation contract",
+      "source_text": "A capability-addressed discovery or selection step may precede issuance. For any delegation expected to produce an issuer-verifiable receipt, the issuer MUST resolve and record a concrete `target_node_id` before registering the delegation as outstanding.",
+      "summary": "Concrete target must be resolved and recorded before outstanding registration.",
+      "implementation": [
+        "src/federated_agent_web/pending.py"
+      ],
+      "tests": [
+        "tests/test_delegation.py::TestPendingRegistration::test_capability_addressed_registration_requires_concrete_target"
+      ],
+      "evidence_class": "persistence/state behavior",
+      "status": "covered"
+    },
+    {
+      "id": "FAW-V02-9-002",
+      "section": "Admission expiry and execution deadline",
+      "source_text": "`deadline` governs execution. Once admitted, the executor MUST terminate execution and emit a `timed_out` terminal receipt no later than `deadline`.",
+      "summary": "Executors terminate and emit timed_out by the deadline.",
+      "implementation": [
+        "src/federated_agent_web/demo.py"
+      ],
+      "tests": [
+        "tests/test_delegation.py::TestDeadlineEnforcement::test_execution_past_deadline_emits_timed_out"
+      ],
+      "evidence_class": "runtime verification",
+      "status": "covered"
+    },
+    {
+      "id": "FAW-V02-9-003",
+      "section": "Admission expiry and execution deadline",
+      "source_text": "The delegation's `authority.expiry` MUST be greater than or equal to `deadline`. A delegation violating either ordering is rejected before handler admission.",
+      "summary": "authority.expiry >= deadline is enforced before admission.",
+      "implementation": [
+        "src/federated_agent_web/verify.py"
+      ],
+      "tests": [
+        "tests/test_delegation.py::TestDelegationAdmission::test_authority_expiry_before_deadline_rejected",
+        "tests/test_rejection_codes.py::TestTimeCodes::test_ordering"
+      ],
+      "evidence_class": "runtime verification",
+      "status": "covered"
+    },
+    {
+      "id": "FAW-V02-10-001",
+      "section": "10. Receipt contract",
+      "source_text": "MUST match `delegation_digest` against a delegation it issued and still holds outstanding;",
+      "summary": "Issuer matches receipt delegation_digest against outstanding delegations.",
+      "implementation": [
+        "src/federated_agent_web/pending.py",
+        "src/federated_agent_web/verify.py"
+      ],
+      "tests": [
+        "tests/test_delegation.py::TestReceiptBinding::test_receipt_with_wrong_digest_rejected",
+        "tests/test_rejection_codes.py::TestReceiptBindingCodes::test_digest_mismatch"
+      ],
+      "evidence_class": "persistence/state behavior",
+      "status": "covered"
+    },
+    {
+      "id": "FAW-V02-10-002",
+      "section": "10. Receipt contract",
+      "source_text": "MUST match `task_id` and `attempt_id` against that delegation;",
+      "summary": "Issuer matches receipt task_id and attempt_id against the delegation.",
+      "implementation": [
+        "src/federated_agent_web/pending.py",
+        "src/federated_agent_web/verify.py"
+      ],
+      "tests": [
+        "tests/test_delegation.py::TestReceiptBinding::test_receipt_wrong_task_or_attempt_rejected"
+      ],
+      "evidence_class": "persistence/state behavior",
+      "status": "covered"
+    },
+    {
+      "id": "FAW-V02-10-003",
+      "section": "10. Receipt contract",
+      "source_text": "MUST verify `executor_node_id` equals that delegation's concrete `target_node_id`;",
+      "summary": "Issuer verifies receipt executor equals the concrete target.",
+      "implementation": [
+        "src/federated_agent_web/pending.py",
+        "src/federated_agent_web/verify.py"
+      ],
+      "tests": [
+        "tests/test_delegation.py::TestReceiptBinding::test_receipt_from_non_target_executor_rejected",
+        "tests/test_rejection_codes.py::TestReceiptBindingCodes::test_wrong_executor"
+      ],
+      "evidence_class": "persistence/state behavior",
+      "status": "covered"
+    },
+    {
+      "id": "FAW-V02-10-004",
+      "section": "10. Receipt contract",
+      "source_text": "MUST reject a receipt for an unknown, non-outstanding, already-terminal, or mismatched delegation;",
+      "summary": "Unknown, non-outstanding, already-terminal, or mismatched receipts are rejected.",
+      "implementation": [
+        "src/federated_agent_web/pending.py",
+        "src/federated_agent_web/verify.py"
+      ],
+      "tests": [
+        "tests/test_delegation.py::TestReceiptBinding::test_receipt_unknown_delegation_rejected",
+        "tests/test_delegation.py::TestReceiptBinding::test_second_terminal_receipt_rejected",
+        "tests/test_rejection_codes.py::TestReceiptBindingCodes::test_no_pending_delegation"
+      ],
+      "evidence_class": "persistence/state behavior",
+      "status": "covered"
+    },
+    {
+      "id": "FAW-V02-10-005",
+      "section": "10. Receipt contract",
+      "source_text": "MUST mark the pending delegation terminal atomically when accepting its first valid terminal receipt.",
+      "summary": "First valid terminal receipt atomically closes the pending delegation.",
+      "implementation": [
+        "src/federated_agent_web/pending.py"
+      ],
+      "tests": [
+        "tests/test_transport.py::TestTransportState::test_receipt_acceptance_closes_only_matching_record",
+        "tests/test_delegation.py::TestReceiptBinding::test_second_terminal_receipt_rejected"
+      ],
+      "evidence_class": "persistence/state behavior",
+      "status": "covered"
+    },
+    {
+      "id": "FAW-V02-12-001",
+      "section": "12. CLI",
+      "source_text": "The printed artifact digest and every artifact digest in the receipt MUST use `sha256:<hex>` over the artifact's exact raw bytes as defined in \u00a710.",
+      "summary": "Artifact digests are sha256 over exact raw bytes.",
+      "implementation": [
+        "src/federated_agent_web/canonical.py",
+        "src/federated_agent_web/demo.py"
+      ],
+      "tests": [
+        "tests/test_vectors.py::TestReceiptVectors::test_artifact_digest_over_raw_bytes",
+        "tests/test_runner.py::test_two_node_process_boundary"
+      ],
+      "evidence_class": "CLI behavior",
+      "status": "covered"
+    },
+    {
+      "id": "FAW-V02-13-001",
+      "section": "13. Conformance tests",
+      "source_text": "The build is not complete unless all tests pass offline. Every normative MUST introduced by this specification requires an executable test or a documented static schema assertion.",
+      "summary": "Every normative MUST has an executable test or documented static schema assertion.",
+      "implementation": [
+        "tests/",
+        "scripts/verify_traceability.py"
+      ],
+      "tests": [
+        "tests/test_traceability.py::TestTraceabilityVerifier::test_real_inventory_passes"
+      ],
+      "evidence_class": "documentation or packaging invariant",
+      "status": "covered"
+    }
+  ],
+  "excluded_paragraphs": [
+    {
+      "section": "v0.2 \u2014 adjudicated change order",
+      "source_text": "**[C4] Conformance coverage:** added executable tests for every new MUST, including wrong-audience relay, non-target executor, unknown/non-outstanding receipt, replay digest mismatch, unknown members, invalid ASCII identifiers, authority/deadline mismatch, and stale pinned-manifest reporting. Test fixtures and reports change; protocol bytes change only where a separately listed schema or field change requires new vectors.",
+      "reason": "Historical changelog entry from the v0.2 adjudicated change order; describes the adjudication process, not a current normative obligation (non-normative).",
+      "classification": "quoted non-normative material"
+    }
+  ]
+}

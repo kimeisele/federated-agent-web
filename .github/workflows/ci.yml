@@ -24,6 +24,10 @@ jobs:
       - name: Run conformance tests
         run: python -m pytest -q
 
+      - name: Verify v0.2 MUST-to-test traceability
+        run: |
+          python -m pytest --collect-only -q > /tmp/faw-pytest-nodes.txt
+          python scripts/verify_traceability.py --pytest-nodes /tmp/faw-pytest-nodes.txt
       - name: Measure critical-core branch coverage
         run: |
           python -m pytest -q \
