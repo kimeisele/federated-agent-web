@@ -66,6 +66,9 @@ class CapabilityExecutor:
         if not input_refs:
             raise ValueError("hash_file capability requires refs input")
         location = Path(input_refs[0]["location"])
+        read_paths = [Path(p).resolve() for p in body["authority"].get("filesystem_scope", {}).get("read_paths", [])]
+        if read_paths and location.resolve() not in read_paths:
+            raise ValueError(f"input {location} outside declared filesystem read scope")
         data = location.read_bytes()
         actual_digest = digest_bytes(data)
         if actual_digest != input_refs[0]["digest"]:

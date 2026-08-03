@@ -103,10 +103,20 @@ class PendingDelegationStore:
         return self.root / task_id / f"{attempt_id}.json"
 
     def register_outstanding(self, delegation: dict[str, Any], delegation_digest: str) -> None:
-        """Persist a delegation as outstanding before it is handed to a transport."""
+        """Persist a delegation as outstanding before it is handed to a transport.
+
+        Per §9, a delegation that is expected to produce an issuer-verifiable
+        receipt must already have a concrete ``target_node_id``: a
+        capability-addressed delegation must be resolved before registration.
+        """
         body = delegation["body"]
         if body["issuer_node_id"] != delegation["issuer"]["node_id"]:
             raise PendingStoreError("body.issuer_node_id must equal envelope issuer.node_id")
+        if not body.get("target_node_id"):
+            raise PendingStoreError(
+                "capability-addressed delegation has no concrete target_node_id; "
+                "resolve a target before registering as outstanding"
+            )
         record = PendingDelegation(
             task_id=body["task_id"],
             attempt_id=body["attempt_id"],

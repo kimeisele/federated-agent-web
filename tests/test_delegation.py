@@ -295,6 +295,29 @@ class TestReplayProtection:
 
 
 class TestDeadlineEnforcement:
+    def test_executor_rejects_input_outside_filesystem_scope(self, tmp_path):
+        from federated_agent_web.demo import CapabilityExecutor
+        from federated_agent_web.canonical import digest_bytes
+
+        issuer, executor = make_node_pair()
+        delegation = build_delegation(issuer, target_node_id=executor.node_id)
+        inside = tmp_path / "inside.bin"
+        inside.write_bytes(b"payload")
+        outside = tmp_path / "outside.bin"
+        outside.write_bytes(b"payload")
+        body = delegation["body"]
+        body["input"] = {
+            "kind": "refs",
+            "refs": [{"digest": digest_bytes(b"payload"), "location": str(outside)}],
+        }
+        body["authority"]["filesystem_scope"] = {"read_paths": [str(inside)]}
+        delegation = issuer.sign_document(KIND_DELEGATION, body)
+        instance = CapabilityExecutor(executor)
+        import pytest as _pytest
+
+        with _pytest.raises(ValueError, match="outside declared filesystem"):
+            instance.execute(delegation, tmp_path / "work")
+
     def test_execution_past_deadline_emits_timed_out(self, tmp_path):
         issuer, executor = make_node_pair()
         base = now()
@@ -323,6 +346,23 @@ class TestDeadlineEnforcement:
         assert receipt["body"]["status"] == "timed_out"
         assert receipt["body"]["task_id"] == body["task_id"]
         assert receipt["body"]["attempt_id"] == body["attempt_id"]
+
+
+class TestPendingRegistration:
+    def test_capability_addressed_registration_requires_concrete_target(self, tmp_path):
+        from federated_agent_web.pending import PendingDelegationStore, PendingStoreError
+
+        issuer, executor = make_node_pair()
+        delegation = build_delegation(issuer, target_node_id=executor.node_id)
+        body = delegation["body"]
+        del body["target_node_id"]
+        body["capability_target"] = {"capability": "hash_file"}
+        delegation = issuer.sign_document(KIND_DELEGATION, body)
+        pending = PendingDelegationStore(tmp_path / "pending")
+        import pytest as _pytest
+
+        with _pytest.raises(PendingStoreError, match="concrete target"):
+            pending.register_outstanding(delegation, content_digest_of(delegation))
 
 
 class TestReceiptBinding:
