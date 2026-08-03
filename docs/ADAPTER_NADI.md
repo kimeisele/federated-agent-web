@@ -51,6 +51,36 @@ Clarifications:
 The wrapper is not added to any normative schema. `spec_version` is not
 bumped.
 
+## Transport addressing
+
+The future adapter distinguishes:
+
+```text
+FAW node identity
+relay mailbox address
+relay authentication credential
+```
+
+- **FAW node identity** is the stable `urn:faw:...` identity in manifests and
+  signed FAW documents.
+- **Relay mailbox address** is the string in the outer Nadi `source`,
+  `target`, and GitHub mailbox filenames.
+- **Relay credential** authenticates GitHub reads and writes; it determines
+  neither FAW identity nor authority.
+
+`Transport.send(document, destination)` receives a FAW node ID; the adapter
+resolves it through the local `routes` mapping to a relay address for the
+outer target and mailbox path, while the wrapper `destination_node_id` keeps
+the original FAW node ID. A missing route fails closed and retains the staged
+message in the local outbox. Route selection is local transport policy only
+and can never change the signed delegation target or make a document valid.
+
+`TransportEnvelope.source` is **untrusted transport-level provenance**: the
+filesystem adapter exposes its sender transport address, the Nadi adapter
+exposes the outer relay source address. It never exposes a trusted FAW
+issuer — the issuer comes only from the successfully verified embedded signed
+document.
+
 ## Boundary contract
 
 A future `nadi_compat` transport adapter (in `transports/nadi.py`) MUST:
@@ -87,6 +117,19 @@ A future `nadi_compat` transport adapter (in `transports/nadi.py`) MUST:
     `acknowledged/`): stage one exact document before remote publication;
     remove only the specifically confirmed published message; retain every
     failed or unconfirmed message.
+
+
+## Nadi-specific acceptance items
+
+The implementation PR must additionally prove:
+
+- FAW destination resolves to a distinct relay address;
+- local FAW identity and local relay address may differ;
+- missing route retains the exact staged message;
+- incoming wrapper addressed to another FAW node is quarantined;
+- outer relay source differing from signed issuer does not affect core
+  verification;
+- relay credentials never appear in manifests or signed documents.
 
 ## Thin backend boundary
 

@@ -61,11 +61,17 @@ class TestSharedTransportContract:
         envelopes = pair.receiver.poll()
         assert len(envelopes) == 1
         envelope = envelopes[0]
+        # The public Transport destination is the FAW node ID passed to send().
         assert envelope.destination == pair.executor.node_id
-        assert envelope.source == pair.issuer.node_id
+        # Transport provenance is untrusted and must not be required to equal
+        # FAW identity; it only has to be present and stable.
+        assert envelope.source is not None
+        assert envelope.source != ""
         assert envelope.message_id
         # Stable across polls.
-        assert pair.receiver.poll()[0].message_id == envelope.message_id
+        repolled = pair.receiver.poll()[0]
+        assert repolled.message_id == envelope.message_id
+        assert repolled.source == envelope.source
 
     def test_distinct_message_ids(self, transport_case, tmp_path):
         """Two sends produce two different transport message IDs."""

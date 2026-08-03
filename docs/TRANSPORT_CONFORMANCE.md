@@ -56,6 +56,12 @@ and PR.
 
 ## Simulated relay conformance versus live GitHub evidence
 
+Nadi-specific acceptance items (distinct relay address, differing local
+FAW/relay identity, missing-route retention, wrong-destination quarantine,
+relay-source independence, no credentials in manifests) are proven by the
+Nadi adapter's own focused tests; they do not become shared filesystem
+properties.
+
 Stubbed-relay conformance proves the adapter's behavior against the
 `Transport` contract. Live GitHub evidence proves only that the real relay
 mailbox can carry FAW documents for a controlled rehearsal. Neither is proof
