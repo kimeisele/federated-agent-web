@@ -1,0 +1,60 @@
+{
+  "kind": "faw-delegation",
+  "spec_version": "0.2",
+  "id": "35b174bd-e3e2-4445-944a-5ec163059d33",
+  "issued_at": "2026-08-03T14:44:09.214417Z",
+  "issuer": {
+    "node_id": "urn:faw:3bd9bfa377d3db65",
+    "kid": "sha256:9a4de5c063673174828f78b2e40ddb35a7071f805ca464ea1cf7a82ef3f1e128"
+  },
+  "body": {
+    "task_id": "11111111-1111-4111-8111-111111111111",
+    "attempt_id": "22222222-2222-4222-8222-222222222222",
+    "issuer_node_id": "urn:faw:3bd9bfa377d3db65",
+    "target_node_id": "urn:faw:775e48c932164d67",
+    "capability": "hash_file",
+    "input": {
+      "kind": "refs",
+      "refs": [
+        {
+          "digest": "sha256:7d4f88919df836f6e78833d4030f0ecb1906e26742e28f7486112e711af2d29f",
+          "location": "/Users/ss/dev/federated-agent-web/examples/evidence-bundle/artifacts/input.bin"
+        }
+      ]
+    },
+    "authority": {
+      "actions": [
+        "hash_file"
+      ],
+      "filesystem_scope": {
+        "read_paths": [
+          "/Users/ss/dev/federated-agent-web/examples/evidence-bundle/artifacts/input.bin"
+        ]
+      },
+      "external_effect_scope": {
+        "allowed_effects": [
+          "none"
+        ]
+      },
+      "expiry": "2026-08-03T17:44:09.214187Z"
+    },
+    "budget": {
+      "max_wall_seconds": 60,
+      "max_output_bytes": 8192
+    },
+    "deadline": "2026-08-03T16:44:09.214187Z",
+    "expected_output": {
+      "kind": "artifact",
+      "media_type": "application/json",
+      "required_artifacts": [
+        "result.json"
+      ],
+      "expects_repository_mutation": false
+    },
+    "expires_at": "2026-08-03T15:44:09.214187Z"
+  },
+  "signature": {
+    "alg": "Ed25519",
+    "value": "FdiO954keRrYgoEFmzSUICNsCVGdXxhT-lEath6LgkTww-U_JOeLIQxt9XXrNjtVVmsTni04WY3PAdEI6gAKCA"
+  }
+}

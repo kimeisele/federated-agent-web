@@ -22,6 +22,7 @@ from .documents import (
 from .identity import NodeIdentity
 from .pending import PendingDelegationStore
 from .replay import ReplayStore
+from .evidence import verify_evidence_bundle
 from .runner import run_once as _runner_run_once
 from .verify import PinnedManifestTrustContext, VerificationPolicy, verify
 
@@ -193,6 +194,18 @@ def _cmd_node_run_once(args: argparse.Namespace) -> int:
     )
 
 
+def _cmd_evidence_verify(args: argparse.Namespace) -> int:
+    """Verify a committed evidence bundle (offline, public keys only)."""
+    try:
+        report = verify_evidence_bundle(Path(args.bundle_dir))
+        print(report)
+        return 0
+    except Exception as exc:
+        print(f"evidence: FAILED")
+        print(f"reason: {exc}")
+        return 1
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="faw",
@@ -252,6 +265,12 @@ def build_parser() -> argparse.ArgumentParser:
     ro.add_argument("--work-dir", required=True, help="scratch work directory")
     ro.add_argument("--role", required=True, choices=["executor", "issuer"], help="node role")
     ro.set_defaults(func=_cmd_node_run_once)
+
+    p = sub.add_parser("evidence", help="offline evidence verification")
+    sub2 = p.add_subparsers(dest="subcommand", required=True)
+    ev = sub2.add_parser("verify", help="verify a committed evidence bundle")
+    ev.add_argument("bundle_dir", help="path to evidence bundle directory")
+    ev.set_defaults(func=_cmd_evidence_verify)
 
     p = sub.add_parser("demo", help="run the fully offline two-node demo (§12)")
     p.add_argument("--workdir", help="scratch directory (default: temp)")
