@@ -21,5 +21,8 @@ faw = "federated_agent_web.cli:main"
 [tool.hatch.build.targets.wheel]
 packages = ["src/federated_agent_web"]
 
+[tool.hatch.build.targets.wheel.force-include]
+"schemas" = "federated_agent_web/schemas"
+
 [tool.pytest.ini_options]
 testpaths = ["tests"]

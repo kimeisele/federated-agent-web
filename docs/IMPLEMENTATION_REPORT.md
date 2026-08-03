@@ -4,7 +4,7 @@ Status: **complete** (all §17 definition-of-done items met except the
 independent-review item, see §7 below). Build date: 2026-08-03.
 
 Remote: `https://github.com/kimeisele/federated-agent-web` (public, `main`)
-Pushed commit: `303d315ba9563a03a277ed018f3e00eeb52e7fe1`
+Pushed commit: `8545e10b23012e68fec6c0e730c45330fcea957e`
 
 ## 1. Files created
 
@@ -131,7 +131,7 @@ categories. Two findings were found and fixed before publication:
 
 **The §17 "independent reviewer finds no unresolved critical issue"
 criterion is NOT yet formally satisfied.** A fresh independent review should
-run against the published commit `303d315` before the project is promoted
+run against the published commit `8545e10` before the project is promoted
 beyond "laboratory prototype" status. This is the only open §17 item.
 
 ## 8. Reused sources
@@ -166,6 +166,6 @@ implementation.
 - Repository created: `kimeisele/federated-agent-web` (public).
 - Branch pushed: `main` (direct default-branch initialization; no draft PR).
 - Remote URL: `https://github.com/kimeisele/federated-agent-web`
-- Pushed commit: `303d315ba9563a03a277ed018f3e00eeb52e7fe1`
+- Pushed commit: `8545e10b23012e68fec6c0e730c45330fcea957e`
 - Moltbook outreach: **not performed**; a separate bounded task is required
   before any pilot recruitment.
