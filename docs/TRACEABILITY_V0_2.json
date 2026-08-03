@@ -266,7 +266,7 @@
     },
     {
       "id": "FAW-V02-10-001",
-      "section": "7.3 Normative verification procedure",
+      "section": "10. Receipt contract",
       "source_text": "MUST match `delegation_digest` against a delegation it issued and still holds outstanding;",
       "summary": "Issuer matches receipt delegation_digest against outstanding delegations.",
       "implementation": [
@@ -377,6 +377,7 @@
   ],
   "excluded_paragraphs": [
     {
+      "section": "v0.2 \u2014 adjudicated change order",
       "source_text": "**[C4] Conformance coverage:** added executable tests for every new MUST, including wrong-audience relay, non-target executor, unknown/non-outstanding receipt, replay digest mismatch, unknown members, invalid ASCII identifiers, authority/deadline mismatch, and stale pinned-manifest reporting. Test fixtures and reports change; protocol bytes change only where a separately listed schema or field change requires new vectors.",
       "reason": "Historical changelog entry from the v0.2 adjudicated change order; describes the adjudication process, not a current normative obligation (non-normative).",
       "classification": "quoted non-normative material"
