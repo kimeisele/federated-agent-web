@@ -171,15 +171,41 @@ class TestVerifyMissingBranches:
         )
         assert result.ok
 
-    def test_concurrent_admission_dup_deduplicates(self, tmp_path):
-        """Step 11: AlreadyAdmitted with matching digest deduplicates."""
+    def test_store_same_digest_create_raises_already_admitted(self, tmp_path):
+        """create() with same digest raises ReplayAlreadyAdmitted carrying the record."""
+        issuer, executor = make_node_pair()
+        delegation = build_delegation(issuer, target_node_id=executor.node_id)
+        digest = content_digest_of(delegation)
+        replay = ReplayStore(tmp_path / "r")
+        replay.create(issuer.node_id, delegation["body"]["attempt_id"], digest)
+        with pytest.raises(ReplayAlreadyAdmitted) as exc_info:
+            replay.create(issuer.node_id, delegation["body"]["attempt_id"], digest)
+        existing = exc_info.value.record
+        assert existing.delegation_digest == digest
+        assert existing.state == "pending"
+
+    def test_step11_matching_race_deduplicates(self, tmp_path, monkeypatch):
+        """Step 11: create() raises AlreadyAdmitted with matching digest → dedup."""
+        from federated_agent_web.replay import ReplayRecord as RR
+
         issuer, executor = make_node_pair()
         delegation = build_delegation(issuer, target_node_id=executor.node_id)
         digest_bytes = canonical.canonical_bytes(delegation)
+        digest = content_digest_of(delegation)
         replay = ReplayStore(tmp_path / "r")
-        # Pre-create the record to simulate a concurrent create
-        replay.create(issuer.node_id, delegation["body"]["attempt_id"],
-                      content_digest_of(delegation))
+
+        # Simulate a concurrent create by pre-populating a record and making
+        # create() raise AlreadyAdmitted on the first call. The store itself
+        # is empty (get() returns None), so step 9 doesn't intercept.
+        existing_record = RR(
+            issuer_node_id=issuer.node_id,
+            attempt_id=delegation["body"]["attempt_id"],
+            delegation_digest=digest,
+        )
+        def fake_create(issuer_id, attempt_id, del_digest):
+            raise ReplayAlreadyAdmitted(existing_record)
+        monkeypatch.setattr(replay, "create", fake_create)
+
         result = verify(
             digest_bytes,
             expected_kind=KIND_DELEGATION,
@@ -192,6 +218,39 @@ class TestVerifyMissingBranches:
         assert result.ok
         assert result.deduplicated
         assert not result.admitted
+        assert result.replay_state == existing_record.state
+
+    def test_step11_conflicting_race_rejected(self, tmp_path, monkeypatch):
+        """Step 11: create() raises AlreadyAdmitted with different digest → conflict."""
+        from federated_agent_web.replay import ReplayRecord as RR
+
+        issuer, executor = make_node_pair()
+        delegation = build_delegation(issuer, target_node_id=executor.node_id)
+        digest_bytes = canonical.canonical_bytes(delegation)
+        replay = ReplayStore(tmp_path / "r")
+
+        # Fabricate a record with a different digest
+        wrong_digest = "sha256:" + "dd" * 32
+        bad_record = RR(
+            issuer_node_id=issuer.node_id,
+            attempt_id=delegation["body"]["attempt_id"],
+            delegation_digest=wrong_digest,
+        )
+        def fake_create(issuer_id, attempt_id, del_digest):
+            raise ReplayAlreadyAdmitted(bad_record)
+        monkeypatch.setattr(replay, "create", fake_create)
+
+        result = verify(
+            digest_bytes,
+            expected_kind=KIND_DELEGATION,
+            local_node_id=executor.node_id,
+            trust_context=trust_for(issuer),
+            local_policy=VerificationPolicy(allowed_actions={"hash_file"}),
+            now=now(),
+            replay_store=replay,
+        )
+        assert not result.ok
+        assert result.reason_code == "replay.digest_conflict"
 
     def test_authority_external_effect_denied_from_policy(self, tmp_path):
         """External effect denied by local policy hits step 10 branch."""

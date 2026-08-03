@@ -26,7 +26,7 @@ jobs:
 
       - name: Measure critical-core branch coverage
         run: |
-          python -m pytest -q             --cov=federated_agent_web.canonical             --cov=federated_agent_web.verify             --cov=federated_agent_web.replay             --cov=federated_agent_web.pending             --cov-branch             --cov-report=term-missing             --cov-fail-under=90
+          python -m pytest -q             --cov=federated_agent_web.canonical             --cov=federated_agent_web.verify             --cov=federated_agent_web.replay             --cov=federated_agent_web.pending             --cov-branch             --cov-report=term-missing             --cov-fail-under=92
 
 
       - name: Run offline demo

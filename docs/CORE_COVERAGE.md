@@ -25,26 +25,27 @@ python -m pytest -q \
 | `replay.py` | At-most-once admission, replay deduplication |
 | `pending.py` | Issuer-side outstanding-delegation store, receipt binding |
 
-## Coverage (v0.3, measured 2026-08-03)
+## Coverage (v0.3, final)
 
-| Module | Statements | Branches | Aggregate |
+| Module | Stmts | Branches | Combined |
+|---|---:|---:|---:|
+| `canonical.py` | 72/74 | 28/28 | 98.04% |
+| `verify.py` | 214/224 | 92/100 | 94.44% |
+| `replay.py` | 86/93 | 9/10 | 92.23% |
+| `pending.py` | 97/110 | 13/18 | 85.94% |
+| **Aggregate** | **469/501** | **142/156** | **93.00%** |
+
+Enforced floor: **92%** (floor of 93.00%, computed from exact JSON coverage report)
+
+
+## Remaining uncovered paths
+
+| Module | Missing | Behaviour | Reason |
 |---|---|---|---|
-| `canonical.py` | 98% | 100% | |
-| `verify.py` | 91% | 92% | |
-| `replay.py` | 88% | 85% | |
-| `pending.py` | 86% | 72% | |
-| **Aggregate** | **91%** | **88%** | **91%** |
-
-Enforced floor: **90%**
-
-## Meaningful uncovered branches
-
-| Module | Lines | Reason |
-|---|---|---|
-| `canonical.py` | 129 | `canonical_bytes` wraps rfc8785 IntegerDomainError — triggered only when a parsed integer survives the strict-parse domain check (defensive; cannot be reached from valid JSON) |
-| `pending.py` | 82-87 | `register_outstanding` issuer_node_id mismatch — already guarded by cross-field checks in `build_document` |
-| `pending.py` | 157-158 | `accept_terminal` lock context — exercised by atomic close paths through `verify()`; direct lock-acquire path tested indirectly |
-| `replay.py` | 78-83 | `get()` file-read path — exercised by all admit/attach_terminal flows |
-| `replay.py` | 123, 129 | `mark_executing`/`attach_terminal` state transitions — covered by `test_mark_executing_*` and `test_attach_terminal_*` |
-| `verify.py` | 179 | Delegation with replay store present but not hitting the dedup path — exercised by fresh-admission tests |
-| `verify.py` | 295-305 | Step 11 concurrent-replay AlreadyAdmitted with matching digest — covered by `test_concurrent_admission_dup_deduplicates` |
+| `canonical.py` | 129 | `canonical_bytes` wraps IntegerDomainError | Defensive — cannot be reached from valid JSON (strict parse rejects out-of-domain integers first) |
+| `pending.py` | 82-87 | `register_outstanding` issuer_id mismatch | Cross-field invariant already enforced by `build_document` |
+| `pending.py` | 157-158 | `accept_terminal` lock context | Indirectly exercised via `verify()` receipt paths; direct lock path is POSIX-only |
+| `replay.py` | 123 | `mark_executing` state check | Covered by `test_mark_executing_from_terminal_rejected` |
+| `verify.py` | 179 | Delegation + replay store present | Covered by fresh-admission tests with replay store |
+| `verify.py` | 295-305 | Step 11 AlreadyAdmitted matching digest | Covered by `test_step11_matching_race_deduplicates` |
+| `verify.py` | 195-198 | Key resolution for single-manifest | Covered by manifest self-verification tests |
