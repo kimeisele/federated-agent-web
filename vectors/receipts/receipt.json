@@ -1,0 +1,37 @@
+{
+  "kind": "faw-receipt",
+  "spec_version": "0.2",
+  "id": "869069e0-ddcc-458e-b2ab-5a677e664a9f",
+  "issued_at": "2026-08-03T12:58:54.823763Z",
+  "issuer": {
+    "node_id": "urn:faw:9d3b2dae0689426d",
+    "kid": "sha256:4649e746a0f6f73ef9c333bcbc0a6186ba3efc82d5f013d6016a5a9b560cf176"
+  },
+  "body": {
+    "receipt_id": "de59a24a-5599-4eb5-9ca3-c148879201c6",
+    "task_id": "8a3b22df-c43d-4afb-95b0-45410e5e3972",
+    "attempt_id": "b32ad6b8-0b31-4860-a72b-bd9cf47026b1",
+    "delegation_digest": "sha256:da4c4286e59ec9537e81ec4e570eedda963ae29f86148ddeeac5b159f717d66d",
+    "executor_node_id": "urn:faw:9d3b2dae0689426d",
+    "status": "succeeded",
+    "started_at": "2026-08-03T12:58:54Z",
+    "finished_at": "2026-08-03T12:58:54Z",
+    "artifacts": [
+      {
+        "name": "result.json",
+        "media_type": "application/json",
+        "digest": "sha256:fffe826ae59aa85d617728d6858cce82f8bce7343b7d63fe0352f8bcc4faef02",
+        "size": 379,
+        "location": "/Users/ss/dev/federated-agent-web/vectors/receipts/artifact.bin"
+      }
+    ],
+    "usage": {
+      "wall_seconds": 0.005,
+      "output_bytes": 379
+    }
+  },
+  "signature": {
+    "alg": "Ed25519",
+    "value": "Eq6GQoUW14Tf28aH9W5xYVl0Hx5KiDXbUuSdcih1kJRb2z00TiMWgAH7AoL-e1KCK5FT3U6aegD02ND98wNmBQ"
+  }
+}

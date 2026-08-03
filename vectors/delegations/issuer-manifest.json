@@ -1,0 +1,43 @@
+{
+  "kind": "faw-node-manifest",
+  "spec_version": "0.2",
+  "id": "2cb0cc95-d844-40a2-9ba0-548d4810e71b",
+  "issued_at": "2026-08-03T12:58:54.808328Z",
+  "issuer": {
+    "node_id": "urn:faw:e14f5db270513359",
+    "kid": "sha256:b5a55a3ee340fff426b3448a303c2913bb86bb613b2de74dd17d816b41a5aec2"
+  },
+  "body": {
+    "node_id": "urn:faw:e14f5db270513359",
+    "display_name": "Vector Issuer",
+    "manifest_sequence": 1,
+    "previous_manifest_digest": null,
+    "manifest_freshness_window_seconds": 3600,
+    "capabilities": [
+      "hash_file"
+    ],
+    "endpoints": [],
+    "keys": [
+      {
+        "kid": "sha256:b5a55a3ee340fff426b3448a303c2913bb86bb613b2de74dd17d816b41a5aec2",
+        "alg": "Ed25519",
+        "public_key": "3__TIf6VS8wK8cnfHc77HWJdGZLNXeEiD9u9EjYBLyI",
+        "status": "active",
+        "valid_from": "2026-08-03T12:58:54.808263Z"
+      }
+    ],
+    "authorization_policy": {
+      "default_deny": true,
+      "required_grants": []
+    },
+    "cost_class": {
+      "tier": "free"
+    },
+    "rate_limits": {},
+    "status": "active"
+  },
+  "signature": {
+    "alg": "Ed25519",
+    "value": "EOdxwJ3WVJ62AVu5zBl0a2I3NVeMxuqmoITaw5dPfz8xJ2xf2ywSvPvU1YBdv8KC0vLpjSGKicahseI-my4FBg"
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "capability": "hash_file",
+  "task_id": "8a3b22df-c43d-4afb-95b0-45410e5e3972",
+  "attempt_id": "b32ad6b8-0b31-4860-a72b-bd9cf47026b1",
+  "input": "/Users/ss/dev/federated-agent-web/vectors/receipts/artifact-input.bin",
+  "input_digest": "sha256:076a8d0bf2110e07365c3704a366f7a17779195653f9cc6650bafdeca02cfa66",
+  "input_size": 45,
+  "executor": "urn:faw:9d3b2dae0689426d"
+}

@@ -1,0 +1,10 @@
+{
+  "kind": "faw-test-message",
+  "spec_version": "0.2",
+  "id": "dd115248-0308-4484-a9cc-92d5ced5bb80",
+  "issued_at": "2026-08-03T12:58:54.804567Z",
+  "payload": {
+    "note": "golden signature vector",
+    "n": 7
+  }
+}

@@ -1,0 +1,9 @@
+{
+  "note": "TEST-ONLY ephemeral key; never use outside tests",
+  "algorithm": "Ed25519",
+  "kid": "sha256:9bbf4950da96c4616986354d2df880a5365933087e786153ecceaf038168ba05",
+  "public_key_b64url": "R5rdpXikfAcTzoH8HK-az3qB1zIX_j8Q2yEULZoCZQA",
+  "private_key_b64url": "yGwv28RwZsVuDGoERzxxITny0h0R8H7mJd1oUBfOyTQ",
+  "signature_alg": "Ed25519",
+  "signature_value_b64url": "egOXELjSQL92pXtXJATi3cal3-BCThkcd8bTaq7kldXzxyF15Umh2FZeksNIKPSnXRKKsVVBOhJQ9kzIQvEqDw"
+}

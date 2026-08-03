@@ -1,0 +1,60 @@
+{
+  "kind": "faw-delegation",
+  "spec_version": "0.2",
+  "id": "61b284d2-170d-4cf1-982b-3d7d00c25b9e",
+  "issued_at": "2026-08-03T12:58:54.814521Z",
+  "issuer": {
+    "node_id": "urn:faw:e14f5db270513359",
+    "kid": "sha256:b5a55a3ee340fff426b3448a303c2913bb86bb613b2de74dd17d816b41a5aec2"
+  },
+  "body": {
+    "task_id": "8a3b22df-c43d-4afb-95b0-45410e5e3972",
+    "attempt_id": "b32ad6b8-0b31-4860-a72b-bd9cf47026b1",
+    "issuer_node_id": "urn:faw:e14f5db270513359",
+    "target_node_id": "urn:faw:vector-target-0001",
+    "capability": "hash_file",
+    "input": {
+      "kind": "refs",
+      "refs": [
+        {
+          "digest": "sha256:076a8d0bf2110e07365c3704a366f7a17779195653f9cc6650bafdeca02cfa66",
+          "location": "/Users/ss/dev/federated-agent-web/vectors/receipts/artifact-input.bin"
+        }
+      ]
+    },
+    "authority": {
+      "actions": [
+        "hash_file"
+      ],
+      "filesystem_scope": {
+        "read_paths": [
+          "/Users/ss/dev/federated-agent-web/vectors/receipts/artifact-input.bin"
+        ]
+      },
+      "external_effect_scope": {
+        "allowed_effects": [
+          "none"
+        ]
+      },
+      "expiry": "2026-08-03T14:18:54Z"
+    },
+    "budget": {
+      "max_wall_seconds": 60,
+      "max_output_bytes": 8192
+    },
+    "deadline": "2026-08-03T13:18:54Z",
+    "expected_output": {
+      "kind": "artifact",
+      "media_type": "application/json",
+      "required_artifacts": [
+        "result.json"
+      ],
+      "expects_repository_mutation": false
+    },
+    "expires_at": "2026-08-03T13:08:54Z"
+  },
+  "signature": {
+    "alg": "Ed25519",
+    "value": "NqMGhBJV-h4YB3RNhOvlOi_S0iRwoKtg_kpWe3MfyOtVUcOfZSDO6WmlJPFMu5jRTpN461-NmyynKKY_3CLjCg"
+  }
+}

@@ -1,0 +1,11 @@
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+dist/
+build/
+.venv/
+
+# Node key material produced by `faw manifest init` — never commit private keys.
+keys/
+*.pem
