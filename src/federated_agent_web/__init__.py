@@ -6,6 +6,6 @@ normative contract and CONFORMANCE.md for the conformance claims.
 
 __version__ = "0.2.0"
 
-from . import canonical, crypto, documents, identity, pending, replay, verify  # noqa: F401
+from . import canonical, crypto, documents, identity, pending, replay, runner, verify  # noqa: F401
 
-__all__ = ["canonical", "crypto", "documents", "identity", "pending", "replay", "verify"]
+__all__ = ["canonical", "crypto", "documents", "identity", "pending", "replay", "runner", "verify"]

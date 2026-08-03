@@ -283,6 +283,88 @@ class NodeIdentity:
         (directory / "node.json").write_text(json.dumps(public, indent=2) + "\n")
         self.save_keytable(directory / "keys")
 
+    @classmethod
+    def load(cls, directory: Path) -> "NodeIdentity":
+        """Load a persisted identity from ``directory``.
+
+        Reads ``node.json`` (node metadata + manifest chain) and the ``keys/``
+        directory (private key material). Reconstructs the full ``NodeKey``
+        table from the current (head) manifest's key entries, pairs each entry
+        with the corresponding private-key file, and verifies that every loaded
+        private key derives the expected public key and ``kid``.
+
+        Fail-closed on missing, malformed, or mismatched key material;
+        requires at least one active signing key with private material.
+        """
+        node_path = directory / "node.json"
+        if not node_path.is_file():
+            raise FileNotFoundError(f"{node_path} not found")
+        data = json.loads(node_path.read_text(encoding="utf-8"))
+        node_id = str(data["node_id"])
+        display_name = str(data["display_name"])
+        freshness_window_seconds = int(data.get("freshness_window_seconds", DEFAULT_FRESHNESS_WINDOW_SECONDS))
+        manifests: list[dict[str, Any]] = list(data["manifests"])
+        if not manifests:
+            raise ValueError("loaded identity has no manifest chain")
+        if not _NODE_ID_RE.match(node_id):
+            raise ValueError(f"invalid node_id {node_id!r} in persisted data")
+        keys_dir = directory / "keys"
+        keys: list[NodeKey] = []
+        head_keys = manifests[-1]["body"]["keys"]
+        for entry in head_keys:
+            kid = entry["kid"]
+            key_file = keys_dir / f"{kid}.key"
+            if not key_file.is_file():
+                if entry["status"] == "active":
+                    raise FileNotFoundError(
+                        f"active key {kid} has no private material at {key_file}"
+                    )
+                # Retired or revoked keys without private material are OK.
+                keys.append(NodeKey(
+                    private_raw=b"",
+                    public_raw=crypto.b64url_decode(entry["public_key"]),
+                    kid=kid,
+                    status=entry["status"],
+                    valid_from=entry["valid_from"],
+                    valid_until=entry.get("valid_until"),
+                    revoked_at=entry.get("revoked_at"),
+                    replaces=entry.get("replaces"),
+                ))
+                continue
+            private_raw = key_file.read_bytes()
+            if len(private_raw) != 32:
+                raise ValueError(f"key file {key_file} has wrong length ({len(private_raw)}), expected 32")
+            derived_public = crypto.private_key_from_raw(private_raw).public_key().public_bytes_raw()
+            expected_public = crypto.b64url_decode(entry["public_key"])
+            if derived_public != expected_public:
+                raise ValueError(f"private key {kid} does not match manifest public key")
+            derived_kid = crypto.kid_for(derived_public)
+            if derived_kid != kid:
+                raise ValueError(f"private key derived kid {derived_kid} != manifest kid {kid}")
+            keys.append(NodeKey(
+                private_raw=private_raw,
+                public_raw=derived_public,
+                kid=kid,
+                status=entry["status"],
+                valid_from=entry["valid_from"],
+                valid_until=entry.get("valid_until"),
+                revoked_at=entry.get("revoked_at"),
+                replaces=entry.get("replaces"),
+            ))
+        active_with_key = [k for k in keys if k.status == "active" and k.private_raw]
+        if not active_with_key:
+            raise ValueError(f"no active key with private material for node {node_id}")
+        identity = cls(
+            node_id=node_id,
+            display_name=display_name,
+            keys=keys,
+            manifests=manifests,
+            freshness_window_seconds=freshness_window_seconds,
+        )
+        for manifest in manifests:
+            validate_document(manifest, KIND_MANIFEST)
+        return identity
+
 
 # ---------------------------------------------------------------------------
 # Manifest chain validation and key resolution (§8, §7.3 step 5)

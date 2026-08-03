@@ -22,6 +22,7 @@ from .documents import (
 from .identity import NodeIdentity
 from .pending import PendingDelegationStore
 from .replay import ReplayStore
+from .runner import run_once as _runner_run_once
 from .verify import PinnedManifestTrustContext, VerificationPolicy, verify
 
 __all__ = ["main"]
@@ -179,6 +180,19 @@ def _cmd_conformance(args: argparse.Namespace) -> int:
     return _print_result(result, f"conformance {target}")
 
 
+
+def _cmd_node_run_once(args: argparse.Namespace) -> int:
+    """Run the one-shot node worker — process at most one envelope."""
+    return _runner_run_once(
+        identity_dir=Path(args.identity),
+        trust_dir=Path(args.trust),
+        transport_root=Path(args.transport_root),
+        state_dir=Path(args.state_dir),
+        work_dir=Path(args.work_dir),
+        role=args.role,
+    )
+
+
 def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         prog="faw",
@@ -226,6 +240,18 @@ def build_parser() -> argparse.ArgumentParser:
     p = sub.add_parser("conformance", help="verify a node at a local path or URL")
     p.add_argument("node_path_or_url")
     p.set_defaults(func=_cmd_conformance)
+
+    
+    p = sub.add_parser("node", help="operational node commands")
+    sub2 = p.add_subparsers(dest="subcommand", required=True)
+    ro = sub2.add_parser("run-once", help="process at most one inbound envelope and exit")
+    ro.add_argument("--identity", required=True, help="persisted node directory")
+    ro.add_argument("--trust", required=True, help="trusted peer node directory")
+    ro.add_argument("--transport-root", required=True, help="shared transport root directory")
+    ro.add_argument("--state-dir", required=True, help="persistent state directory")
+    ro.add_argument("--work-dir", required=True, help="scratch work directory")
+    ro.add_argument("--role", required=True, choices=["executor", "issuer"], help="node role")
+    ro.set_defaults(func=_cmd_node_run_once)
 
     p = sub.add_parser("demo", help="run the fully offline two-node demo (§12)")
     p.add_argument("--workdir", help="scratch directory (default: temp)")

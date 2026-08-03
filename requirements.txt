@@ -9,3 +9,5 @@ pycparser==3.0
 referencing==0.37.0
 rfc8785==0.1.4
 rpds-py==0.30.0
+pytest==8.0.0
+pytest-timeout==2.4.0
