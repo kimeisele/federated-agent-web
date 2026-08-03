@@ -1,5 +1,8 @@
 # Verification Rejection Codes
 
+Codes are selected directly by authoritative verification branches.
+They are never inferred from the human-readable reason text.
+
 Stable, machine-readable reason codes for every semantically distinct
 failure returned by `VerificationResult`. These are reference-implementation
 API identifiers — not normative wire fields.

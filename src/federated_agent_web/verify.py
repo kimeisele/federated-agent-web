@@ -109,11 +109,11 @@ class VerificationResult:
         return self.freshness == "stale"
 
 
-def _fail(step: int, reason: str, result: VerificationResult, *, code: str = "") -> VerificationResult:
+def _fail(step: int, reason: str, result: VerificationResult, *, code: str) -> VerificationResult:
     result.ok = False
     result.step = step
     result.reason = reason
-    result.reason_code = code or _code_from_step(step, reason)
+    result.reason_code = code
     return result
 
 
@@ -145,12 +145,17 @@ def verify(
         return _fail(1, f"strict parse failed: {exc}", result, code=code)
 
     # -- Step 2: expected-kind schema validation ------------------------------
+    if isinstance(doc, dict) and "kind" in doc:
+        if doc["kind"] != expected_kind:
+            return _fail(
+                2,
+                f"document kind {doc['kind']!r} does not match expected {expected_kind!r}",
+                result,
+                code="document.wrong_kind",
+            )
     try:
         validate_document(doc, expected_kind)
     except ValueError as exc:
-        msg = str(exc)
-        if "expected_kind" in msg:
-            return _fail(2, f"schema validation failed: {exc}", result, code="document.wrong_kind")
         return _fail(2, f"schema validation failed: {exc}", result, code="schema.invalid")
 
     body = doc["body"]
@@ -279,10 +284,9 @@ def verify(
 
     # -- Step 10: local authority and budget evaluation --------------------------
     if expected_kind == KIND_DELEGATION:
-        admission = _evaluate_authority_and_budget(body, local_policy)
-        if admission is not None:
-            code = "authority.action_denied" if "action" in admission or "authorized" in admission else "authority.external_effect_denied" if "external" in admission else "budget.unenforceable"
-            return _fail(10, admission, result, code=code)
+        rejection = _evaluate_authority_and_budget(body, local_policy)
+        if rejection is not None:
+            return _fail(10, rejection.reason, result, code=rejection.code)
 
     # -- Step 11: atomic admission (delegations) ---------------------------------
     if expected_kind == KIND_DELEGATION and replay_store is not None:
@@ -330,36 +334,43 @@ def _resolve_document_key(
     return resolve_key_for(chain, doc["issuer"]["node_id"], doc["issuer"]["kid"], at)
 
 
-def _evaluate_authority_and_budget(body: dict[str, Any], policy: VerificationPolicy) -> str | None:
+@dataclass(frozen=True)
+class AdmissionRejection:
+    """Structured authority/budget rejection — code set at detection point."""
+    code: str
+    reason: str
+
+
+def _evaluate_authority_and_budget(body: dict[str, Any], policy: VerificationPolicy) -> AdmissionRejection | None:
     """Return an error message when authority/budget cannot be enforced; else None."""
     authority = body["authority"]
     capability = body["capability"]
     if capability not in authority["actions"]:
-        return f"capability {capability!r} not authorized by authority.actions"
+        return AdmissionRejection("authority.action_denied", f"capability {capability!r} not authorized by authority.actions")
     if policy.allowed_actions is not None:
         for action in authority["actions"]:
             if action not in policy.allowed_actions:
-                return f"action {action!r} not permitted by local policy"
+                return AdmissionRejection("authority.action_denied", f"action {action!r} not permitted by local policy")
     external = authority.get("external_effect_scope", {}).get("allowed_effects", [])
     for effect in external:
         if effect not in policy.allowed_external_effects:
-            return f"external effect {effect!r} not permitted by local policy"
+            return AdmissionRejection("authority.external_effect_denied", f"external effect {effect!r} not permitted by local policy")
 
     budget = body["budget"]
     if not budget:
-        return "unbounded budget is not enforceable"
+        return AdmissionRejection("budget.unenforceable", "unbounded budget is not enforceable")
     if "max_wall_seconds" in budget:
         ceiling = int(budget["max_wall_seconds"])
         if policy.max_wall_seconds_cap is not None and ceiling > policy.max_wall_seconds_cap:
-            return f"max_wall_seconds {ceiling} exceeds local cap {policy.max_wall_seconds_cap}"
+            return AdmissionRejection("budget.unenforceable", f"max_wall_seconds {ceiling} exceeds local cap {policy.max_wall_seconds_cap}")
     if "max_tokens" in budget and not policy.can_enforce_tokens:
-        return "max_tokens ceiling cannot be measured or enforced locally"
+        return AdmissionRejection("budget.unenforceable", "max_tokens ceiling cannot be measured or enforced locally")
     if "max_cost_usd" in budget and not policy.can_enforce_cost:
-        return "max_cost_usd ceiling cannot be measured or enforced locally"
+        return AdmissionRejection("budget.unenforceable", "max_cost_usd ceiling cannot be measured or enforced locally")
     if "max_output_bytes" in budget:
         ceiling = int(budget["max_output_bytes"])
         if policy.max_output_bytes_cap is not None and ceiling > policy.max_output_bytes_cap:
-            return f"max_output_bytes {ceiling} exceeds local cap {policy.max_output_bytes_cap}"
+            return AdmissionRejection("budget.unenforceable", f"max_output_bytes {ceiling} exceeds local cap {policy.max_output_bytes_cap}")
     return None
 
 

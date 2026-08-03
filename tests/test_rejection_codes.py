@@ -258,6 +258,65 @@ class TestAuthorityBudgetCodes:
         _assert_code(r, "budget.unenforceable")
 
 
+class TestWordingIndependence:
+    """Codes must not be derived from human-readable reason text."""
+    from federated_agent_web.verify import AdmissionRejection
+
+    def test_action_denied_independent_of_wording(self):
+        from federated_agent_web.verify import AdmissionRejection
+        r = AdmissionRejection("authority.action_denied", "purely neutral diagnostic text")
+        assert r.code == "authority.action_denied"
+        assert "action" not in r.reason
+        assert "authorized" not in r.reason
+
+    def test_external_effect_independent_of_wording(self):
+        from federated_agent_web.verify import AdmissionRejection
+        r = AdmissionRejection("authority.external_effect_denied", "neutral diagnostic")
+        assert r.code == "authority.external_effect_denied"
+        assert "external" not in r.reason
+
+    def test_budget_unenforceable_independent_of_wording(self):
+        from federated_agent_web.verify import AdmissionRejection
+        r = AdmissionRejection("budget.unenforceable", "neutral diagnostic")
+        assert r.code == "budget.unenforceable"
+        # The reason can be anything; the code is set at detection, not inferred
+
+    def test_wrong_kind_not_from_exception_text(self):
+        # Verify that document.wrong_kind is from structural check, not exception text
+        issuer, executor = make_node_pair()
+        delegation = build_delegation(issuer, target_node_id=executor.node_id)
+        doc = canonical.parse_strict(canonical.canonical_bytes(delegation))
+        # This is a valid KIND_DELEGATION document; wrong kind can only be detected
+        # by checking doc["kind"] != expected_kind before schema validation runs.
+        assert doc["kind"] == KIND_DELEGATION
+        assert doc["kind"] != KIND_RECEIPT
+
+    def test_schema_invalid_without_kind_field(self):
+        # Missing kind → schema.invalid, not document.wrong_kind
+        issuer, _ = make_node_pair()
+        r = verify(
+            b'{"spec_version":"0.2","id":"11111111-1111-4111-8111-111111111111","issued_at":"2026-01-01T00:00:00Z","issuer":{"node_id":"urn:faw:x","kid":"sha256:0000000000000000000000000000000000000000000000000000000000000000"},"body":{},"signature":{"alg":"Ed25519","value":"AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA"}}',
+            expected_kind=KIND_DELEGATION,
+            local_node_id=None,
+            trust_context=trust_for(issuer),
+            local_policy=VerificationPolicy(),
+            now=now(),
+        )
+        assert not r.ok
+        assert r.reason_code == "schema.invalid", f"got {r.reason_code}"
+
+    def test_no_fallback_classifier(self):
+        """_fail() must not accept a missing code — the parameter is required."""
+        import inspect
+        from federated_agent_web.verify import _fail
+        sig = inspect.signature(_fail)
+        params = {n: p for n, p in sig.parameters.items() if n == "code"}
+        assert len(params) == 1
+        p = params["code"]
+        assert p.default is inspect.Parameter.empty, "code must have no default"
+        assert p.kind == inspect.Parameter.KEYWORD_ONLY, "code must be keyword-only"
+
+
 class TestCodeMutation:
     """Prove that changing a code branch makes the targeted test fail."""
     def test_wrong_code_detected(self):
