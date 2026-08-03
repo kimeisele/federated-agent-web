@@ -18,6 +18,12 @@ dependencies = [
 [project.scripts]
 faw = "federated_agent_web.cli:main"
 
+[dependency-groups]
+test = [
+    "pytest>=8,<9",
+    "pytest-timeout>=2,<3",
+]
+
 [tool.hatch.build.targets.wheel]
 packages = ["src/federated_agent_web"]
 

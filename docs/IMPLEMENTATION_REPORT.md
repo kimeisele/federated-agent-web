@@ -19,7 +19,7 @@ Publication history (all on `main`, in order):
 ```text
 MANIFESTO.md                       imported verbatim from docs/MANIFESTO.md (Draft 3)
 README.md, SPEC.md, SECURITY.md, CONFORMANCE.md, skill.md
-pyproject.toml, requirements.txt, .gitignore
+pyproject.toml, .gitignore
 schemas/node-manifest.schema.json  normative, closed, kind const, spec_version enum ["0.2"]
 schemas/delegation.schema.json     same
 schemas/receipt.schema.json        same
@@ -52,7 +52,7 @@ reference transports/stores.
 ## 3. Test commands and results
 
 ```bash
-pip install -r requirements.txt && pip install -e .
+pip install -e . && python -m pip install --group test
 python -m pytest -q
 ```
 
