@@ -26,18 +26,18 @@ model. Do not run against untrusted peers.
 
 ```bash
 python -m venv .venv && source .venv/bin/activate
-pip install -r requirements.txt
-pip install -e .
-
+python -m pip install --upgrade pip
+python -m pip install -e .
 faw demo                 # fully offline two-node demo
 faw conformance <node-path-or-url>   # verify a node manifest
 faw manifest init --name "My Node" --capabilities hash_file --out ./my-node
 ```
 
-Run the conformance suite offline:
+Development installation (for running the conformance suite):
 
 ```bash
-pytest -q
+python -m pip install --group test
+python -m pytest -q
 ```
 
 ### Operational one-shot node

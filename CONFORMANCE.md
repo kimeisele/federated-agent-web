@@ -7,8 +7,8 @@ documents the claims the suite actually proves. Everything runs offline.
 ## Running the suite
 
 ```bash
-pip install -r requirements.txt && pip install -e .
-pytest -q
+pip install -e . && python -m pip install --group test
+python -m pytest -q
 ```
 
 All tests are offline and deterministic; no network access is used. Ephemeral
