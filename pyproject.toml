@@ -22,6 +22,7 @@ faw = "federated_agent_web.cli:main"
 test = [
     "pytest>=8,<9",
     "pytest-timeout>=2,<3",
+    "pytest-cov>=7,<8",
 ]
 
 [tool.hatch.build.targets.wheel]
@@ -32,3 +33,11 @@ packages = ["src/federated_agent_web"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
+
+[tool.coverage.run]
+branch = true
+source = ["src/federated_agent_web"]
+omit = ["tests/*", "*/__pycache__/*", "*.venv/*"]
+
+[tool.coverage.report]
+show_missing = true

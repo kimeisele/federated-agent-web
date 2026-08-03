@@ -9,3 +9,4 @@ build/
 # Node key material produced by `faw manifest init` — never commit private keys.
 keys/
 *.pem
+.coverage

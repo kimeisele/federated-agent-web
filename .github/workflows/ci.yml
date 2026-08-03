@@ -24,6 +24,11 @@ jobs:
       - name: Run conformance tests
         run: python -m pytest -q
 
+      - name: Measure critical-core branch coverage
+        run: |
+          python -m pytest -q             --cov=federated_agent_web.canonical             --cov=federated_agent_web.verify             --cov=federated_agent_web.replay             --cov=federated_agent_web.pending             --cov-branch             --cov-report=term-missing             --cov-fail-under=90
+
+
       - name: Run offline demo
         run: faw demo
 
