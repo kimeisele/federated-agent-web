@@ -20,6 +20,8 @@ not "secure", not "decentralized" — see [`CONFORMANCE.md`](CONFORMANCE.md) for
 exactly what is demonstrated and [`SECURITY.md`](SECURITY.md) for the threat
 model. Do not run against untrusted peers.
 
+[Roadmap: v0.2 → v1.0](docs/ROADMAP.md)
+
 ## Quick start
 
 ```bash
