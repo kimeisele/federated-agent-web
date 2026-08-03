@@ -1,19 +1,19 @@
 {
-  "node_id": "urn:faw:3bd9bfa377d3db65",
+  "node_id": "urn:faw:907f93e00fd8f494",
   "display_name": "Evidence Issuer",
   "freshness_window_seconds": 3600,
   "manifests": [
     {
       "kind": "faw-node-manifest",
       "spec_version": "0.2",
-      "id": "711cb6ab-aaff-4c7e-becb-323f4afbe860",
-      "issued_at": "2026-08-03T14:44:09.202057Z",
+      "id": "1b699be3-afd8-406e-9c58-71c374e836dc",
+      "issued_at": "2026-08-03T14:59:10.208859Z",
       "issuer": {
-        "node_id": "urn:faw:3bd9bfa377d3db65",
-        "kid": "sha256:9a4de5c063673174828f78b2e40ddb35a7071f805ca464ea1cf7a82ef3f1e128"
+        "node_id": "urn:faw:907f93e00fd8f494",
+        "kid": "sha256:0258dd4259f28e15a6dfad900bf0e0df3403547d8c4aaa1ed8bb21db8cef01c5"
       },
       "body": {
-        "node_id": "urn:faw:3bd9bfa377d3db65",
+        "node_id": "urn:faw:907f93e00fd8f494",
         "display_name": "Evidence Issuer",
         "manifest_sequence": 1,
         "previous_manifest_digest": null,
@@ -24,11 +24,11 @@
         "endpoints": [],
         "keys": [
           {
-            "kid": "sha256:9a4de5c063673174828f78b2e40ddb35a7071f805ca464ea1cf7a82ef3f1e128",
+            "kid": "sha256:0258dd4259f28e15a6dfad900bf0e0df3403547d8c4aaa1ed8bb21db8cef01c5",
             "alg": "Ed25519",
-            "public_key": "4tgqh8yCi2Vs5p39LEfdOt742fdISBGBEIeNBnH1Wqw",
+            "public_key": "KqYTdihm7XPyeTtqROE_wa7z772MPGBSImyeQeYUm2A",
             "status": "active",
-            "valid_from": "2026-08-03T14:44:09.201691Z"
+            "valid_from": "2026-08-03T14:59:10.208235Z"
           }
         ],
         "authorization_policy": {
@@ -43,7 +43,7 @@
       },
       "signature": {
         "alg": "Ed25519",
-        "value": "HWnWAnQwAFP7zRyNBEkOINyL4Jgc_H-FTosbD4Tr3Y6blgMkBzT5N-dvDJPOD_FXYWdsiAnaeh2yhIrw2InoDQ"
+        "value": "XKrPnoaAq53bu5DlpSxWZETD9LKRwncJ1CDQFlgp3fAkWgfOnbFdo-Sdjvf_heRa3jhJSOqM8OqpXY9qUD2rBQ"
       }
     }
   ]

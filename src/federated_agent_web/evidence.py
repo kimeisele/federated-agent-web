@@ -1,4 +1,4 @@
-"""Offline evidence-bundle verification for FAW adoption (§3).
+"""Offline evidence-bundle verification for FAW adoption.
 
 Operates entirely on committed public material. No private keys, no network
 access, no external writes. Reuses existing core verification without
@@ -8,6 +8,7 @@ duplicating it.
 from __future__ import annotations
 
 import json
+import tempfile
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -38,16 +39,19 @@ class EvidenceError(ValueError):
 
 def _safe_resolve(bundle_root: Path, relative: str) -> Path:
     """Resolve a bundle-relative path; reject traversal and absolute paths."""
-    if not relative or relative.startswith("/"):
-        raise EvidenceError(f"path must be relative: {relative!r}")
-    resolved = (bundle_root / relative).resolve()
-    if not str(resolved).startswith(str(bundle_root.resolve())):
+    if not relative:
+        raise EvidenceError("path must not be empty")
+    if relative.startswith("/") or (len(relative) > 1 and relative[1] == ":"):
+        raise EvidenceError(f"absolute path rejected: {relative!r}")
+    root = bundle_root.resolve()
+    resolved = (root / relative).resolve()
+    if not resolved.is_relative_to(root):
         raise EvidenceError(f"path escapes bundle: {relative!r}")
     return resolved
 
 
 def _load_public_chain(path: Path) -> tuple[list[dict[str, Any]], PinnedManifestTrustContext]:
-    data = json.loads(path.read_text(encoding="utf-8"))
+    data = canonical.parse_strict(path.read_bytes())
     manifests: list[dict[str, Any]] = list(data["manifests"])
     if not manifests:
         raise EvidenceError(f"empty manifest chain in {path}")
@@ -98,21 +102,23 @@ def verify_evidence_bundle(bundle_dir: Path) -> str:
     if not meta_path.is_file():
         raise EvidenceError(f"bundle.json not found in {bundle_dir}")
 
-    meta = json.loads(meta_path.read_text(encoding="utf-8"))
+    meta = canonical.parse_strict(meta_path.read_bytes())
 
     # 1. Resolve all paths safely
     issuer_path = _safe_resolve(bundle_root, str(meta["issuer_state"]))
     executor_path = _safe_resolve(bundle_root, str(meta["executor_state"]))
     delegation_path = _safe_resolve(bundle_root, str(meta["delegation"]))
     receipt_path = _safe_resolve(bundle_root, str(meta["receipt"]))
-    artifact_rel = str(meta["artifacts"][0])
-    artifact_path = _safe_resolve(bundle_root, artifact_rel)
+    artifacts_meta = list(meta["artifacts"])
+    if len(artifacts_meta) != 1:
+        raise EvidenceError(f"bundle.json must declare exactly 1 artifact, got {len(artifacts_meta)}")
+    artifact_ref = str(artifacts_meta[0])
 
-    for p in [issuer_path, executor_path, delegation_path, receipt_path, artifact_path]:
+    for p in [issuer_path, executor_path, delegation_path, receipt_path]:
         if not p.is_file():
             raise EvidenceError(f"bundle file not found: {p}")
 
-    # 2. Load public manifest chains
+    # 2. Load public manifest chains (strict parse)
     issuer_chain, issuer_trust = _load_public_chain(issuer_path)
     executor_chain, executor_trust = _load_public_chain(executor_path)
     issuer_node_id = issuer_chain[-1]["body"]["node_id"]
@@ -124,7 +130,7 @@ def verify_evidence_bundle(bundle_dir: Path) -> str:
     receipt = canonical.parse_strict(receipt_path.read_bytes())
     validate_document(receipt, KIND_RECEIPT)
 
-    # 4. Verify relationships that the core does not check in verify()
+    # 4. Verify relationships the core does not enforce in this context
     dbody = delegation["body"]
     rbody = receipt["body"]
     if dbody["issuer_node_id"] != issuer_node_id:
@@ -143,13 +149,8 @@ def verify_evidence_bundle(bundle_dir: Path) -> str:
     if rbody["delegation_digest"] != delegation_digest:
         raise EvidenceError("receipt delegation_digest does not match committed delegation")
 
-    # 5. Verify signatures against respective manifest chains
-    if not _verify_doc_signature(delegation, issuer_chain):
-        raise EvidenceError("delegation signature invalid against issuer manifest chain")
-    if not _verify_doc_signature(receipt, executor_chain):
-        raise EvidenceError("receipt signature invalid against executor manifest chain")
-
-    # 6. Historical delegation verification at receipt started_at
+    # 5. Historical delegation verification at receipt started_at
+    #    (uses core verify(), which includes signature verification)
     delegation_time = parse_timestamp(rbody["started_at"])
     receipt_time = parse_timestamp(receipt["issued_at"])
 
@@ -173,8 +174,8 @@ def verify_evidence_bundle(bundle_dir: Path) -> str:
     if not delegation_result.ok:
         raise EvidenceError(f"historical delegation verification failed: {delegation_result.reason}")
 
-    # 7. Receipt binding through ephemeral pending store
-    import tempfile
+    # 6. Receipt binding through ephemeral pending store
+    #    (uses core verify(), which includes signature verification)
     with tempfile.TemporaryDirectory() as td:
         pending = PendingDelegationStore(Path(td))
         pending.register_outstanding(delegation, delegation_digest)
@@ -197,14 +198,34 @@ def verify_evidence_bundle(bundle_dir: Path) -> str:
         if not receipt_result.ok:
             raise EvidenceError(f"receipt binding verification failed: {receipt_result.reason}")
 
-    # 8. Verify artifact digest
-    artifact_bytes = artifact_path.read_bytes()
-    expected_artifact_digest = rbody["artifacts"][0]["digest"]
-    actual_artifact_digest = digest_bytes(artifact_bytes)
-    if actual_artifact_digest != expected_artifact_digest:
+    # 7. Verify artifact — exactly one, path bound, digest and size match
+    receipt_artifacts = list(rbody["artifacts"])
+    if len(receipt_artifacts) != 1:
+        raise EvidenceError(f"receipt must declare exactly 1 artifact, got {len(receipt_artifacts)}")
+    ra = receipt_artifacts[0]
+
+    if ra["location"] != artifact_ref:
         raise EvidenceError(
-            f"artifact digest mismatch: {actual_artifact_digest} != {expected_artifact_digest}"
+            f"bundle metadata artifact path {artifact_ref!r} != receipt location {ra['location']!r}"
         )
+    if ra["location"].startswith("/") or ".." in ra["location"]:
+        raise EvidenceError(f"receipt artifact location must be a relative path: {ra['location']!r}")
+
+    artifact_path = _safe_resolve(bundle_root, ra["location"])
+    if not artifact_path.is_file():
+        raise EvidenceError(f"artifact not found: {artifact_path}")
+
+    artifact_bytes = artifact_path.read_bytes()
+    actual_size = len(artifact_bytes)
+    if actual_size != ra["size"]:
+        raise EvidenceError(f"artifact size {actual_size} != receipt {ra['size']}")
+
+    actual_digest = digest_bytes(artifact_bytes)
+    if actual_digest != ra["digest"]:
+        raise EvidenceError(f"artifact digest {actual_digest} != receipt {ra['digest']}")
+
+    if artifact_path.name != ra["name"]:
+        raise EvidenceError(f"artifact file name {artifact_path.name!r} != receipt name {ra['name']!r}")
 
     return _report_ok({
         "delegation_verification_time": rbody["started_at"],
@@ -216,17 +237,5 @@ def verify_evidence_bundle(bundle_dir: Path) -> str:
         "delegation_digest": delegation_digest,
         "receipt_digest": receipt_digest,
         "receipt_status": rbody["status"],
-        "artifact_digest": actual_artifact_digest,
+        "artifact_digest": actual_digest,
     })
-
-
-def _verify_doc_signature(doc: dict[str, Any], chain: list[dict[str, Any]]) -> bool:
-    """Verify a document's Ed25519 signature against a manifest chain."""
-    from . import crypto
-    from .identity import resolve_key_for
-    at = parse_timestamp(doc["issued_at"])
-    public_raw = resolve_key_for(chain, doc["issuer"]["node_id"], doc["issuer"]["kid"], at)
-    if public_raw is None:
-        return False
-    canon = canonical.canonical_bytes(canonical.strip_signature(doc))
-    return crypto.verify_canonical(canon, doc["signature"]["value"], public_raw)
