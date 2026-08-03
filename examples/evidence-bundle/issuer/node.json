@@ -1,0 +1,50 @@
+{
+  "node_id": "urn:faw:907f93e00fd8f494",
+  "display_name": "Evidence Issuer",
+  "freshness_window_seconds": 3600,
+  "manifests": [
+    {
+      "kind": "faw-node-manifest",
+      "spec_version": "0.2",
+      "id": "1b699be3-afd8-406e-9c58-71c374e836dc",
+      "issued_at": "2026-08-03T14:59:10.208859Z",
+      "issuer": {
+        "node_id": "urn:faw:907f93e00fd8f494",
+        "kid": "sha256:0258dd4259f28e15a6dfad900bf0e0df3403547d8c4aaa1ed8bb21db8cef01c5"
+      },
+      "body": {
+        "node_id": "urn:faw:907f93e00fd8f494",
+        "display_name": "Evidence Issuer",
+        "manifest_sequence": 1,
+        "previous_manifest_digest": null,
+        "manifest_freshness_window_seconds": 3600,
+        "capabilities": [
+          "hash_file"
+        ],
+        "endpoints": [],
+        "keys": [
+          {
+            "kid": "sha256:0258dd4259f28e15a6dfad900bf0e0df3403547d8c4aaa1ed8bb21db8cef01c5",
+            "alg": "Ed25519",
+            "public_key": "KqYTdihm7XPyeTtqROE_wa7z772MPGBSImyeQeYUm2A",
+            "status": "active",
+            "valid_from": "2026-08-03T14:59:10.208235Z"
+          }
+        ],
+        "authorization_policy": {
+          "default_deny": true,
+          "required_grants": []
+        },
+        "cost_class": {
+          "tier": "free"
+        },
+        "rate_limits": {},
+        "status": "active"
+      },
+      "signature": {
+        "alg": "Ed25519",
+        "value": "XKrPnoaAq53bu5DlpSxWZETD9LKRwncJ1CDQFlgp3fAkWgfOnbFdo-Sdjvf_heRa3jhJSOqM8OqpXY9qUD2rBQ"
+      }
+    }
+  ]
+}

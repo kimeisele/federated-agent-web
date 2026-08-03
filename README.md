@@ -100,6 +100,19 @@ vectors/                golden vectors for independent implementations
 docs/                   reuse report, implementation report, Nadi adapter spec
 ```
 
+
+### Verify public evidence
+
+```bash
+python -m pip install -e .
+faw evidence verify examples/evidence-bundle
+```
+
+This verifies a historical signed delegation and receipt using only
+committed public keys. No private keys or network access are required.
+It does not assert current admissibility or that a third-party operator
+accepted the receipt.
+
 ## The contract in one paragraph
 
 A node publishes a **signed manifest** declaring capabilities, endpoints,

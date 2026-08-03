@@ -1,0 +1,11 @@
+{
+  "evidence_format": "faw-evidence-bundle",
+  "format_version": 1,
+  "issuer_state": "issuer/node.json",
+  "executor_state": "executor/node.json",
+  "delegation": "delegation.json",
+  "receipt": "receipt.json",
+  "artifacts": [
+    "artifacts/result.json"
+  ]
+}
