@@ -13,7 +13,7 @@ python -m pytest -q \
   --cov=federated_agent_web.pending \
   --cov-branch \
   --cov-report=term-missing \
-  --cov-fail-under=90
+  --cov-fail-under=92
 ```
 
 ## In-scope modules
@@ -40,12 +40,17 @@ Enforced floor: **92%** (floor of 93.00%, computed from exact JSON coverage repo
 
 ## Remaining uncovered paths
 
-| Module | Missing | Behaviour | Reason |
-|---|---|---|---|
-| `canonical.py` | 129 | `canonical_bytes` wraps IntegerDomainError | Defensive — cannot be reached from valid JSON (strict parse rejects out-of-domain integers first) |
-| `pending.py` | 82-87 | `register_outstanding` issuer_id mismatch | Cross-field invariant already enforced by `build_document` |
-| `pending.py` | 157-158 | `accept_terminal` lock context | Indirectly exercised via `verify()` receipt paths; direct lock path is POSIX-only |
-| `replay.py` | 123 | `mark_executing` state check | Covered by `test_mark_executing_from_terminal_rejected` |
-| `verify.py` | 179 | Delegation + replay store present | Covered by fresh-admission tests with replay store |
-| `verify.py` | 295-305 | Step 11 AlreadyAdmitted matching digest | Covered by `test_step11_matching_race_deduplicates` |
-| `verify.py` | 195-198 | Key resolution for single-manifest | Covered by manifest self-verification tests |
+| Module | Missing lines | Function/decision | Untested outcome | Classification |
+|---|---|---|---|---|
+| `canonical.py` | 129, 150 | `canonical_bytes` wraps rfc8785 errors; unused helper | IntegerDomainError from out-of-domain int after parse | defensive |
+| `pending.py` | 82–87 | `register_outstanding` issuer-node-id mismatch | Rejection when envelope issuer ≠ body issuer | defensive (cross-field check in `build_document`) |
+| `pending.py` | 154, 157–158 | `accept_terminal` lock context + atomic write | POSIX-only flock path, atomic-replace write path | race-only / platform-specific |
+| `pending.py` | 178, 180, 184, 188 | `accept_terminal` error branches (already-terminal, digest mismatch, wrong executor) | Receipt rejected with `PendingStoreError` | exception-cleanup-only (all exercised through `verify()` receipt paths) |
+| `replay.py` | 78–83 | `get()` file-read path | Read persisted record from disk | corrupt-state-only (exercised by store operations; line-level not hit when `create()` writes but `get()` reads same process) |
+| `replay.py` | 123 | `mark_executing` state check from non-pending/non-executing | `ReplayIntegrityViolation` from terminal state | covered (exercised by `test_mark_executing_from_terminal_rejected`) |
+| `verify.py` | 179 | Step 4 delegation branch — delegation with replay store present but fresh admission | Fresh delegation not deduplicated | covered (exercised by fresh-admission tests with replay store) |
+| `verify.py` | 195–198 | `_resolve_document_key` for manifest in chain | Key resolution against previous manifest | covered (exercised by manifest chain verification) |
+| `verify.py` | 256–257 | Step 9 replay dedup for delegation | Matching digest deduplication before step 11 | covered (exercised by `test_duplicate_delivery_at_most_once`) |
+| `verify.py` | 304–305 | Step 11 `ReplayIntegrityViolation` handler | Store-level integrity violation caught at step 11 | race-only (exercised by `test_step11_matching_race_deduplicates` monkeypatch) |
+| `verify.py` | 332–333 | `_evaluate_authority_and_budget` — action denied by policy | Policy-allowed-actions check failure | covered (exercised by `test_action_not_permitted_by_local_policy_rejected`) |
+| `verify.py` | 362–374 | `_evaluate_authority_and_budget` — budget enforceability branches | Unenforceable ceiling detection | covered (exercised by `test_budget_max_cost_unenforceable`, `test_budget_wall_seconds_over_cap_rejected`) |
