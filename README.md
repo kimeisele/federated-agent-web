@@ -24,8 +24,9 @@ model. Do not run against untrusted peers.
 
 ## Quick start
 
-**Prerequisites:** Git, Python 3.11 or newer. No private keys, external
-services, or networked FAW peers are required.
+**Prerequisites:** Git, Python 3.11 or newer, and a Bash/Zsh-compatible
+POSIX shell for the activation command shown below. No private keys,
+external services, or networked FAW peers are required.
 
 ### Run the offline demo
 

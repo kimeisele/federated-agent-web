@@ -13,6 +13,8 @@ trap 'rm -rf "$trial_root"' EXIT
 echo "=== README quick-start gate ==="
 echo "source_commit: $source_sha"
 
+start_seconds="$SECONDS"
+
 # 1. Clone
 git clone --quiet "$source_repo" "$trial_root/federated-agent-web"
 git -C "$trial_root/federated-agent-web" checkout --quiet --detach "$source_sha"
@@ -26,8 +28,6 @@ python3 -m venv .venv
 # shellcheck disable=SC1091
 source .venv/bin/activate
 
-start_seconds="$SECONDS"
-
 python -m pip install --upgrade pip
 python -m pip install .
 
@@ -39,18 +39,18 @@ if ! grep -Fq "demo: OK" <<<"$demo_output"; then
     exit 1
 fi
 
+# 3. Check source tree is clean
+if [ -n "$(git status --short)" ]; then
+    echo "FAIL: source tree is not clean after faw demo:"
+    git status --short
+    exit 1
+fi
+
 elapsed_seconds="$((SECONDS - start_seconds))"
 echo "elapsed_seconds: $elapsed_seconds"
 
 if [ "$elapsed_seconds" -ge 600 ]; then
     echo "FAIL: elapsed time $elapsed_seconds >= 600 seconds"
-    exit 1
-fi
-
-# 3. Check source tree is clean
-if [ -n "$(git status --short)" ]; then
-    echo "FAIL: source tree is not clean after faw demo:"
-    git status --short
     exit 1
 fi
 
