@@ -1,9 +1,9 @@
 # Nadi compatibility adapter — boundary specification
 
-Status: **experimental, non-normative, transport-only.** Specified, not
-implemented. Implementation is a later v0.4 issue and PR. The v0.4 shared
-transport conformance suite runs against the filesystem adapter; the Nadi
-adapter is added by registering its harness.
+Status: **experimental, non-normative, transport-only.** Implemented behind
+the `Transport` interface; the shared conformance suite runs against both the
+filesystem adapter and the Nadi adapter (stubbed relay). Live GitHub
+rehearsal is a separate, later step.
 
 Purpose: allow a FAW-conforming node to exchange signed documents through the
 existing NADI GitHub-backed relay (`kimeisele/steward-federation`) without
@@ -114,9 +114,13 @@ A future `nadi_compat` transport adapter (in `transports/nadi.py`) MUST:
 9. **Suppress already-acknowledged remote messages** when the GitHub mailbox
    is read again; repeated remote mailbox contents are expected and safe.
 10. **Own local durable state** (`outbox/`, `inbox/`, `failed/`,
-    `acknowledged/`): stage one exact document before remote publication;
-    remove only the specifically confirmed published message; retain every
-    failed or unconfirmed message.
+    `acknowledged/`): stage one exact document before remote publication
+    (`.msg` + `.meta` + `.ready` commit marker, written last); remove only
+    the specifically confirmed published message; retain every failed or
+    unconfirmed message. `nack()` preserves the exact document bytes, inbox
+    metadata, and reason under `failed/`; a same-ID different-bytes conflict
+    quarantines the inbox copy and preserves both the original bytes and the
+    incoming conflicting envelope evidence.
 
 
 ## Nadi-specific acceptance items

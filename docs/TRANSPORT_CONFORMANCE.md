@@ -22,11 +22,11 @@ python -m pytest -q tests/test_transport_contract.py
 | Transport | Shared contract suite | Live network evidence |
 |---|---:|---:|
 | Filesystem | pass | not applicable |
-| Nadi/GitHub | not implemented | not performed |
+| Nadi/GitHub | pass against stub | not performed |
 
-The suite currently registers exactly one case (`filesystem_transport_case`).
-A future Nadi/GitHub adapter is added by appending its harness to
-`TRANSPORT_CASES` — no shared test changes.
+The suite currently registers two cases (`filesystem_transport_case` and
+`nadi_stub_transport_case`); the same 10 properties run against both —
+20 passing parameterized cases, no shared test changes required.
 
 ## Shared properties
 
@@ -58,7 +58,8 @@ and PR.
 
 Nadi-specific acceptance items (distinct relay address, differing local
 FAW/relay identity, missing-route retention, wrong-destination quarantine,
-relay-source independence, no credentials in manifests) are proven by the
+relay-source independence, no credentials in manifests, failed-evidence
+preservation, same-ID conflict quarantine, atomic staging) are proven by the
 Nadi adapter's own focused tests; they do not become shared filesystem
 properties.
 
