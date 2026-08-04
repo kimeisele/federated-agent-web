@@ -621,8 +621,11 @@ class TestMessageIdBoundary:
         # appears only as JSON data inside the evidence.
         relay_evidence = list((state_root / "failed").glob("invalid-*.relay.json"))
         assert len(relay_evidence) == len(self.MALICIOUS_IDS)
-        data = relay_evidence[0].read_text()
-        assert any(evil in data for evil in self.MALICIOUS_IDS)
+        # The malicious strings appear only as JSON data (message_id values)
+        # inside the evidence; compare decoded values, not raw text, since
+        # json.dumps escapes backslashes.
+        evidence_ids = {json.loads(f.read_text())["message_id"] for f in relay_evidence}
+        assert evidence_ids == set(self.MALICIOUS_IDS)
 
     def test_ack_rejects_noncanonical_ids_without_writes(self, tmp_path):
         sender, receiver, issuer, executor, _b, _ir, _er = _make_pair(tmp_path)
