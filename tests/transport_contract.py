@@ -218,10 +218,14 @@ class NadiStubTransportHarness(TransportHarness):
 
     def duplicate_inbound(self, pair: TransportPair, envelope) -> None:
         import shutil
+        import uuid
 
         inbox = pair.receiver_state / "inbox"
         source = inbox / f"{envelope.message_id}.msg"
-        target = inbox / f"dup-{envelope.message_id}.msg"
+        # A duplicate delivery is a distinct transport message with its own
+        # canonical message ID carrying the same document bytes.
+        duplicate_id = str(uuid.uuid4())
+        target = inbox / f"{duplicate_id}.msg"
         shutil.copy(source, target)
 
     def failed_message_ids(self, pair: TransportPair) -> list[str]:

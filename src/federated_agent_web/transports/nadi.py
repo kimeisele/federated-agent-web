@@ -148,6 +148,13 @@ def _valid_timestamp(value: str) -> bool:
     return parsed.year >= 1970
 
 
+def _require_message_id(value: object) -> str:
+    """Validate a transport message ID before it may become a path component."""
+    if not isinstance(value, str) or not _valid_uuid(value):
+        raise NadiError("transport message ID is not a canonical UUID")
+    return value
+
+
 def unwrap_document(
     payload: dict[str, Any],
     *,
@@ -189,8 +196,10 @@ def unwrap_document(
     encoded = payload.get("document")
     if not isinstance(encoded, str):
         raise NadiError("wrapper document is not a string")
-    # Canonical base64url without padding: charset-only plus canonical round trip.
-    if not _B64URL_RE.match(encoded) or "=" in encoded:
+    # Canonical base64url without padding: empty string is the canonical
+    # encoding of zero bytes; anything else must match the charset and
+    # round-trip canonically.
+    if encoded != "" and (not _B64URL_RE.match(encoded) or "=" in encoded):
         raise NadiError("wrapper document is not canonical base64url")
     try:
         document_bytes = crypto.b64url_decode(encoded)
@@ -307,33 +316,43 @@ class NadiTransport(Transport):
 
     def poll(self) -> list[TransportEnvelope]:
         for envelope in self.backend.fetch(self.relay_address):
-            if envelope.operation != FAW_DOCUMENT_OPERATION:
+            # Validate the outer ID before any path use. An invalid ID must
+            # never become a filename; use a locally generated safe evidence ID.
+            if not (isinstance(envelope.message_id, str) and _valid_uuid(envelope.message_id)):
+                self._record_invalid_outer(envelope)
                 continue
-            if self._is_suppressed(envelope.message_id):
+            message_id = envelope.message_id
+            if self._is_suppressed(message_id):
                 continue
             # Outer relay boundary: the envelope must be addressed to the local
             # relay address, with valid outer source/destination grammar.
             if envelope.destination_address != self.relay_address:
-                self._record_failed(envelope.message_id,
-                                    f"outer destination {envelope.destination_address!r} != local relay {self.relay_address!r}")
+                self._record_outer_rejection(message_id, envelope,
+                                             f"outer destination {envelope.destination_address!r} != local relay {self.relay_address!r}")
                 continue
             if not _valid_relay_address(envelope.source_address) or not _valid_relay_address(envelope.destination_address):
-                self._record_failed(envelope.message_id, "invalid outer relay address grammar")
+                self._record_outer_rejection(message_id, envelope, "invalid outer relay address grammar")
+                continue
+            if envelope.operation != FAW_DOCUMENT_OPERATION:
+                self._record_outer_rejection(message_id, envelope, f"unexpected operation {envelope.operation!r}")
                 continue
             try:
                 wrapper_message_id, document_bytes, source_node_id = unwrap_document(
                     envelope.payload,
                     local_node_id=self.node_id,
-                    outer_message_id=envelope.message_id,
+                    outer_message_id=message_id,
                 )
             except NadiError as exc:
-                self._record_failed(envelope.message_id, str(exc))
-                self._record_relay_evidence(envelope.message_id, envelope)
+                _require_message_id(message_id)
+                self._record_failed(message_id, str(exc))
+                self._record_relay_evidence(message_id, envelope)
                 continue
             self._import(wrapper_message_id, envelope, document_bytes, source_node_id)
         return self._list_inbox()
 
     def ack(self, transport_message_id: str) -> None:
+        # Reject noncanonical IDs before touching the filesystem.
+        _require_message_id(transport_message_id)
         # Durable tombstone BEFORE removing inbox data.
         _atomic_write(self.acknowledged_dir / f"{transport_message_id}.ack",
                       json.dumps({"message_id": transport_message_id}).encode())
@@ -341,6 +360,8 @@ class NadiTransport(Transport):
         (self.inbox_dir / f"{transport_message_id}.meta").unlink(missing_ok=True)
 
     def nack(self, transport_message_id: str, reason: str) -> None:
+        # Reject noncanonical IDs before touching the filesystem.
+        _require_message_id(transport_message_id)
         # Preserve actual failed evidence before removing inbox copies.
         msg = self.inbox_dir / f"{transport_message_id}.msg"
         meta = self.inbox_dir / f"{transport_message_id}.meta"
@@ -356,6 +377,7 @@ class NadiTransport(Transport):
     # -- internal helpers ---------------------------------------------------
 
     def _stage(self, message_id: str, document: bytes, destination_faw: str, relay_target: str | None) -> None:
+        _require_message_id(message_id)
         meta = {
             "message_id": message_id,
             "destination_node_id": destination_faw,
@@ -368,19 +390,23 @@ class NadiTransport(Transport):
         _atomic_write(self.outbox_dir / f"{message_id}.ready", b"ready")
 
     def _outbox_mark_delivered(self, message_id: str) -> None:
+        _require_message_id(message_id)
         for suffix in (".msg", ".meta", ".ready"):
             (self.outbox_dir / f"{message_id}{suffix}").unlink(missing_ok=True)
 
     def _is_suppressed(self, message_id: str) -> bool:
+        _require_message_id(message_id)
         return (self.acknowledged_dir / f"{message_id}.ack").exists() or (
             self.failed_dir / f"{message_id}.nack"
         ).exists()
 
     def _record_failed(self, message_id: str, reason: str) -> None:
+        _require_message_id(message_id)
         _atomic_write(self.failed_dir / f"{message_id}.nack",
                       json.dumps({"message_id": message_id, "reason": reason}).encode())
 
     def _record_relay_evidence(self, message_id: str, envelope: RelayEnvelope) -> None:
+        _require_message_id(message_id)
         evidence = {
             "message_id": envelope.message_id,
             "source_address": envelope.source_address,
@@ -391,7 +417,30 @@ class NadiTransport(Transport):
         _atomic_write(self.failed_dir / f"{message_id}.relay.json",
                       json.dumps(evidence).encode())
 
+    def _record_invalid_outer(self, envelope: RelayEnvelope) -> None:
+        """Preserve an envelope with an invalid outer ID under a safe local ID."""
+        evidence_id = f"invalid-{uuid.uuid4()}"
+        evidence = {
+            "message_id": envelope.message_id,  # original untrusted value, as data only
+            "source_address": envelope.source_address,
+            "destination_address": envelope.destination_address,
+            "operation": envelope.operation,
+            "payload": envelope.payload,
+            "note": "invalid outer message ID; evidence saved under safe local ID",
+        }
+        _atomic_write(self.failed_dir / f"{evidence_id}.relay.json",
+                      json.dumps(evidence).encode())
+        _atomic_write(self.failed_dir / f"{evidence_id}.nack",
+                      json.dumps({"message_id": evidence_id, "reason": "invalid outer message ID"}).encode())
+
+    def _record_outer_rejection(self, message_id: str, envelope: RelayEnvelope, reason: str) -> None:
+        """Preserve nack + relay evidence for a rejected outer envelope."""
+        _require_message_id(message_id)
+        self._record_failed(message_id, reason)
+        self._record_relay_evidence(message_id, envelope)
+
     def _import(self, message_id: str, envelope: RelayEnvelope, document_bytes: bytes, source_node_id: str) -> None:
+        _require_message_id(message_id)
         msg_path = self.inbox_dir / f"{message_id}.msg"
         if msg_path.exists():
             # Idempotent for identical bytes; integrity conflict otherwise.
@@ -409,6 +458,7 @@ class NadiTransport(Transport):
 
     def _quarantine_conflict(self, message_id: str, envelope: RelayEnvelope, incoming: bytes, msg_path: Path) -> None:
         """Same ID with different bytes: quarantine inbox copies, preserve evidence."""
+        _require_message_id(message_id)
         reason = f"same message ID {message_id} with different bytes"
         self._record_failed(message_id, reason)
         # Preserve the original inbox bytes + metadata under failed/.

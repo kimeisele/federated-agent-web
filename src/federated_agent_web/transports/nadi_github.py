@@ -24,6 +24,7 @@ from .nadi import (
     NadiRelayBackend,
     RelayEnvelope,
     RelayPublishResult,
+    _valid_uuid,
 )
 
 __all__ = [
@@ -40,7 +41,7 @@ __all__ = [
 # substring so mailbox path parsing stays unambiguous.
 _RELAY_ADDRESS_RE = re.compile(r"^[A-Za-z0-9](?:[A-Za-z0-9._-]{0,63})$")
 _MAILBOX_RE = re.compile(r"^nadi/([A-Za-z0-9._-]+)_to_([A-Za-z0-9._-]+)\.json$")
-_REPO_RE = re.compile(r"^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$")
+_COMPONENT_RE = re.compile(r"^[A-Za-z0-9_.-]+$")
 
 
 class MailboxNotFound(Exception):
@@ -60,8 +61,18 @@ def is_valid_relay_address(address: str) -> bool:
 
 
 def _validate_repo(hub_repo: str) -> None:
-    if not isinstance(hub_repo, str) or not _REPO_RE.match(hub_repo):
+    if not isinstance(hub_repo, str):
         raise ValueError(f"hub_repo must be 'owner/repository', got {hub_repo!r}")
+    parts = hub_repo.split("/")
+    if len(parts) != 2:
+        raise ValueError(f"hub_repo must be 'owner/repository', got {hub_repo!r}")
+    owner, repository = parts
+    if not _COMPONENT_RE.match(owner) or not _COMPONENT_RE.match(repository):
+        raise ValueError(f"hub_repo components must match safe grammar, got {hub_repo!r}")
+    if owner in (".", "..") or repository in (".", ".."):
+        raise ValueError(f"hub_repo components must not be '.' or '..', got {hub_repo!r}")
+    if "\\" in hub_repo:
+        raise ValueError(f"hub_repo must not contain backslashes, got {hub_repo!r}")
 
 
 class GitHubMailboxClient(Protocol):
@@ -140,8 +151,12 @@ class GhCliMailboxClient:
         if not isinstance(content, str):
             raise MailboxClientError("contents response has no string content field")
         try:
-            raw = base64.b64decode(content).decode()
-        except (ValueError, UnicodeDecodeError) as exc:
+            import binascii
+
+            compact = "".join(content.split())  # GitHub may insert whitespace/newlines
+            raw_bytes = base64.b64decode(compact, validate=True)
+            raw = raw_bytes.decode("utf-8")
+        except (binascii.Error, ValueError, UnicodeDecodeError) as exc:
             raise MailboxClientError(f"contents response has invalid base64 content: {exc}") from exc
         try:
             parsed = json.loads(raw)
@@ -198,13 +213,16 @@ def _mailbox_entries_equal(entry: dict[str, Any], envelope: RelayEnvelope) -> bo
 def _entry_to_envelope(entry: Any) -> RelayEnvelope | None:
     """Return a validated envelope or None when the entry is malformed.
 
-    A malformed entry never raises out of the mailbox loop.
+    A malformed entry never raises out of the mailbox loop. The outer ID must
+    be a canonical UUID and must never become a filesystem path component.
     """
     if not isinstance(entry, dict):
         return None
     message_id = entry.get("id")
     correlation_id = entry.get("correlation_id")
     if not isinstance(message_id, str) or not isinstance(correlation_id, str):
+        return None
+    if not _valid_uuid(message_id) or not _valid_uuid(correlation_id):
         return None
     if message_id != correlation_id:
         return None
@@ -241,19 +259,29 @@ class GitHubNadiRelayBackend:
 
     def publish(self, envelopes: list[RelayEnvelope]) -> list[RelayPublishResult]:
         results: list[RelayPublishResult] = []
+        # Preflight across the COMPLETE batch: reject duplicate or
+        # noncanonical attempted message IDs before any mailbox write.
+        attempted_ids = [e.message_id for e in envelopes]
+        bad = [mid for mid in attempted_ids if not (isinstance(mid, str) and _valid_uuid(mid))]
+        dupes = {mid for mid in attempted_ids if attempted_ids.count(mid) > 1}
+        if bad or dupes:
+            for envelope in envelopes:
+                if envelope.message_id in bad:
+                    results.append(RelayPublishResult(
+                        message_id=envelope.message_id, ok=False, error="noncanonical attempted message ID"))
+                elif envelope.message_id in dupes:
+                    results.append(RelayPublishResult(
+                        message_id=envelope.message_id, ok=False, error="duplicate attempted message ID"))
+                else:
+                    results.append(RelayPublishResult(
+                        message_id=envelope.message_id, ok=False, error="batch rejected: duplicate/noncanonical IDs"))
+            return results
         # Group by the complete mailbox key (source, destination).
         by_mailbox: dict[tuple[str, str], list[RelayEnvelope]] = {}
         for envelope in envelopes:
             by_mailbox.setdefault((envelope.source_address, envelope.destination_address), []).append(envelope)
 
         for (source, target), group in by_mailbox.items():
-            # Reject duplicate attempted message IDs before writing.
-            attempted_ids = [e.message_id for e in group]
-            if len(set(attempted_ids)) != len(attempted_ids):
-                for envelope in group:
-                    results.append(RelayPublishResult(
-                        message_id=envelope.message_id, ok=False, error="duplicate attempted message ID"))
-                continue
             try:
                 path = _mailbox_path(source, target)
                 self._append_to_mailbox(path, group)

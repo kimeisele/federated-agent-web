@@ -594,6 +594,190 @@ class TestGhCliClient:
             client.list_paths("nadi")
 
 
+class TestMessageIdBoundary:
+    MALICIOUS_IDS = ["../../../../tmp/faw-escape", "/tmp/faw-absolute", "..\\..\\escape",
+                     "not-a-uuid", "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA"]
+
+    def test_poll_invalid_outer_id_no_escape(self, tmp_path):
+        from federated_agent_web.transports.nadi import RelayEnvelope
+
+        sender, receiver, issuer, executor, backend, _ir, executor_relay = _make_pair(tmp_path)
+        wrapper = wrap_document(message_id="22222222-2222-4222-8222-222222222222",
+                                source_node_id=issuer.node_id,
+                                destination_node_id=executor.node_id,
+                                document_bytes=b"x")
+        for evil in self.MALICIOUS_IDS:
+            backend.mailboxes.setdefault(executor_relay, []).append(RelayEnvelope(
+                message_id=evil, source_address=_ir, destination_address=executor_relay,
+                operation="faw.document", payload=wrapper))
+        assert receiver.poll() == []
+        # Nothing written outside the state root; evidence only inside failed/.
+        state_root = tmp_path / "receiver-state"
+        for evil in self.MALICIOUS_IDS:
+            assert not (state_root.parent / "faw-escape").exists()
+            assert not (tmp_path / "faw-absolute").exists()
+            assert not any(p.name == f"{evil}.nack" for p in (state_root / "failed").iterdir())
+        # Evidence exists under safe invalid-<uuid> names; the malicious string
+        # appears only as JSON data inside the evidence.
+        relay_evidence = list((state_root / "failed").glob("invalid-*.relay.json"))
+        assert len(relay_evidence) == len(self.MALICIOUS_IDS)
+        data = relay_evidence[0].read_text()
+        assert any(evil in data for evil in self.MALICIOUS_IDS)
+
+    def test_ack_rejects_noncanonical_ids_without_writes(self, tmp_path):
+        sender, receiver, issuer, executor, _b, _ir, _er = _make_pair(tmp_path)
+        state_root = tmp_path / "receiver-state"
+        for evil in ["../../escape", "/tmp/escape", "not-a-uuid", "AAAAAAAA-AAAA-4AAA-8AAA-AAAAAAAAAAAA"]:
+            with pytest.raises(NadiError, match="canonical UUID"):
+                receiver.ack(evil)
+            with pytest.raises(NadiError, match="canonical UUID"):
+                receiver.nack(evil, "reason")
+        assert not list((state_root / "acknowledged").glob("*.ack"))
+        assert not list((state_root / "failed").glob("*.nack"))
+        assert not (tmp_path / "escape").exists()
+
+    def test_valid_unknown_uuid_ack_noop(self, tmp_path):
+        sender, receiver, issuer, executor, _b, _ir, _er = _make_pair(tmp_path)
+        receiver.ack("abababab-abab-4bab-8bab-abababababab")  # canonical, unknown: no-op
+        assert receiver.poll() == []
+
+
+class TestEmptyDocumentBytes:
+    def test_empty_document_bytes_round_trip(self, tmp_path):
+        sender, receiver, issuer, executor, backend, _ir, executor_relay = _make_pair(tmp_path)
+        payload = wrap_document(message_id="abababab-abab-4bab-8bab-abababababab",
+                                source_node_id=issuer.node_id,
+                                destination_node_id=executor.node_id,
+                                document_bytes=b"")
+        message_id, document_bytes, _source = unwrap_document(
+            payload, local_node_id=executor.node_id,
+            outer_message_id="abababab-abab-4bab-8bab-abababababab")
+        assert document_bytes == b""
+        assert payload["document"] == ""  # canonical empty base64url
+        # Transport preserves exact bytes end-to-end.
+        sender.send(b"", executor.node_id)
+        envelope = receiver.poll()[0]
+        assert envelope.document_bytes == b""
+
+
+class TestCrossMailboxDuplicates:
+    def test_same_id_across_sources_rejected_no_write(self, tmp_path):
+        from federated_agent_web.transports.nadi import RelayEnvelope
+
+        client = _FakeGhClient()
+        backend = GitHubNadiRelayBackend(hub_repo="kimeisele/fake", client=client)
+        e1 = RelayEnvelope("abababab-abab-4bab-8bab-abababababab", "relay-a", "relay-b",
+                           "faw.document", {"id": "x"})
+        e2 = RelayEnvelope("abababab-abab-4bab-8bab-abababababab", "relay-c", "relay-b",
+                           "faw.document", {"id": "x"})
+        results = backend.publish([e1, e2])
+        assert all(not r.ok for r in results)
+        assert any("duplicate" in r.error for r in results)
+        assert client.files == {}  # zero writes
+
+    def test_same_id_across_targets_rejected_no_write(self, tmp_path):
+        from federated_agent_web.transports.nadi import RelayEnvelope
+
+        client = _FakeGhClient()
+        backend = GitHubNadiRelayBackend(hub_repo="kimeisele/fake", client=client)
+        e1 = RelayEnvelope("abababab-abab-4bab-8bab-abababababab", "relay-a", "relay-b",
+                           "faw.document", {"id": "x"})
+        e2 = RelayEnvelope("abababab-abab-4bab-8bab-abababababab", "relay-a", "relay-d",
+                           "faw.document", {"id": "x"})
+        results = backend.publish([e1, e2])
+        assert all(not r.ok for r in results)
+        assert client.files == {}
+
+    def test_noncanonical_attempted_id_rejected_no_write(self, tmp_path):
+        from federated_agent_web.transports.nadi import RelayEnvelope
+
+        client = _FakeGhClient()
+        backend = GitHubNadiRelayBackend(hub_repo="kimeisele/fake", client=client)
+        e1 = RelayEnvelope("../../escape", "relay-a", "relay-b", "faw.document", {"id": "x"})
+        results = backend.publish([e1])
+        assert not results[0].ok
+        assert "noncanonical" in results[0].error
+        assert client.files == {}
+
+
+class TestHubRepoValidation:
+    @pytest.mark.parametrize("bad", ["../repo", "owner/..", "./repo", "owner/.", "a/b/c", "owner", "", "a\\b/c"])
+    def test_rejected(self, bad):
+        with pytest.raises(ValueError):
+            GhCliMailboxClient(bad)
+            GitHubNadiRelayBackend(hub_repo=bad, client=None)
+
+    def test_accepted(self):
+        GhCliMailboxClient("kimeisele/federated-agent-web")
+
+
+class TestContentsBase64:
+    def _client_with(self, monkeypatch, stdout: bytes, returncode: int = 0, stderr: bytes = b""):
+        def fake_run(argv, input=None, capture_output=True, text=False, timeout=60):
+            return TestGhCliClient.FakeProc(stdout, returncode, stderr)
+
+        monkeypatch.setattr(subprocess, "run", fake_run)
+        return GhCliMailboxClient("kimeisele/fake")
+
+    def test_linebreaks_accepted(self, monkeypatch):
+        import base64 as b64
+
+        content = b64.b64encode(b'[{"id": "abababab-abab-4bab-8bab-abababababab"}]').decode()
+        content = content[:20] + "\n" + content[20:]  # inject a newline
+        body = json.dumps({"content": content, "sha": "s"}).encode()
+        client = self._client_with(monkeypatch, body)
+        entries, sha = client.read_json("nadi/a_to_b.json")
+        assert sha == "s"
+        assert len(entries) == 1
+
+    def test_trailing_bang_fails(self, monkeypatch):
+        import base64 as b64
+
+        content = b64.b64encode(b'[]').decode() + "!!!!"
+        body = json.dumps({"content": content}).encode()
+        client = self._client_with(monkeypatch, body)
+        with pytest.raises(MailboxClientError, match="base64"):
+            client.read_json("nadi/a_to_b.json")
+
+    def test_invalid_utf8_fails(self, monkeypatch):
+        import base64 as b64
+
+        content = b64.b64encode(b"\xff\xfe").decode()
+        body = json.dumps({"content": content}).encode()
+        client = self._client_with(monkeypatch, body)
+        with pytest.raises(MailboxClientError):
+            client.read_json("nadi/a_to_b.json")
+
+    def test_empty_content_cannot_become_valid_mailbox(self, monkeypatch):
+        body = json.dumps({"content": ""}).encode()
+        client = self._client_with(monkeypatch, body)
+        with pytest.raises(MailboxClientError):
+            client.read_json("nadi/a_to_b.json")
+
+
+class TestOuterRejectionEvidence:
+    def test_wrong_destination_preserves_relay_evidence(self, tmp_path):
+        from federated_agent_web.transports.nadi import RelayEnvelope
+
+        sender, receiver, issuer, executor, backend, _ir, executor_relay = _make_pair(tmp_path)
+        wrapper = wrap_document(message_id="abababab-abab-4bab-8bab-abababababab",
+                                source_node_id=issuer.node_id,
+                                destination_node_id=executor.node_id,
+                                document_bytes=b"x")
+        backend.mailboxes.setdefault(executor_relay, []).append(RelayEnvelope(
+            message_id="abababab-abab-4bab-8bab-abababababab",
+            source_address=_ir, destination_address="relay-wrong",
+            operation="faw.document", payload=wrapper))
+        assert receiver.poll() == []
+        failed = tmp_path / "receiver-state" / "failed"
+        nacks = list(failed.glob("abababab-abab-4bab-8bab-abababababab.nack"))
+        relays = list(failed.glob("abababab-abab-4bab-8bab-abababababab.relay.json"))
+        assert len(nacks) == 1 and len(relays) == 1
+        evidence = json.loads(relays[0].read_text())
+        assert "credential" not in json.dumps(evidence).lower()
+        assert "token" not in json.dumps(evidence).lower()
+
+
 class TestNoRejectedImports:
     def test_adapter_does_not_import_nadi_kit(self):
         check = (
