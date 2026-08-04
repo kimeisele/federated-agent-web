@@ -50,8 +50,8 @@ WRAPPER_KEYS = {
     "experimental",
 }
 _NODE_ID_RE = re.compile(r"^urn:faw:[a-z0-9](?:[a-z0-9._-]{0,62})$")
-_TIMESTAMP_RE = re.compile(r"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,9})?Z$")
-_UUID_RE = re.compile(r"^[0-9a-f]{8}-[0-9a-f]{4}-[47][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$")
+_DIGEST_RE = re.compile(r"^sha256:[0-9a-f]{64}$")
+_B64URL_RE = re.compile(r"^[A-Za-z0-9_-]+$")
 
 
 class NadiError(ValueError):
@@ -120,11 +120,38 @@ def wrap_document(
     }
 
 
+def _valid_uuid(value: str) -> bool:
+    try:
+        return str(uuid.UUID(value)) == value
+    except (ValueError, AttributeError):
+        return False
+
+
+def _valid_timestamp(value: str) -> bool:
+    """Validate a real UTC RFC 3339 timestamp ending in ``Z`` (no offset)."""
+    if not isinstance(value, str) or not value.endswith("Z"):
+        return False
+    body = value[:-1]
+    if "+" in body or "-" in body[10:]:
+        return False  # any offset other than UTC is rejected
+    try:
+        if "." in body:
+            main, fraction = body.split(".", 1)
+            if not fraction or not fraction.isdigit():
+                return False
+            fraction = (fraction + "000000")[:6]
+            parsed = datetime.strptime(f"{main}.{fraction}", "%Y-%m-%dT%H:%M:%S.%f")
+        else:
+            parsed = datetime.strptime(body, "%Y-%m-%dT%H:%M:%S")
+    except ValueError:
+        return False
+    return parsed.year >= 1970
+
+
 def unwrap_document(
     payload: dict[str, Any],
     *,
     local_node_id: str,
-    local_relay_address: str,
     outer_message_id: str,
 ) -> tuple[str, bytes, str]:
     """Validate a wrapper and return ``(message_id, document_bytes, source_node_id)``.
@@ -133,11 +160,13 @@ def unwrap_document(
     type, digest mismatch, wrong wrapper destination, or outer/wrapper message
     ID mismatch all raise ``NadiError``. Wrapper metadata is never authority.
     """
+    if not isinstance(payload, dict):
+        raise NadiError("wrapper payload is not an object")
     if set(payload.keys()) != WRAPPER_KEYS:
         raise NadiError(f"unknown or missing wrapper members: {sorted(set(payload) ^ WRAPPER_KEYS)}")
     message_id = payload["message_id"]
-    if not isinstance(message_id, str) or not _UUID_RE.match(message_id):
-        raise NadiError("wrapper message_id is not a UUID")
+    if not isinstance(message_id, str) or not _valid_uuid(message_id):
+        raise NadiError("wrapper message_id is not a canonical UUID")
     if message_id != outer_message_id:
         raise NadiError("outer relay message ID differs from wrapper message ID")
     source_node_id = payload["source_node_id"]
@@ -155,16 +184,23 @@ def unwrap_document(
     if payload.get("experimental") is not True:
         raise NadiError("experimental flag must be true")
     created_at = payload.get("created_at")
-    if not isinstance(created_at, str) or not _TIMESTAMP_RE.match(created_at):
-        raise NadiError("wrapper created_at is not a UTC RFC3339 timestamp")
+    if not _valid_timestamp(created_at):
+        raise NadiError("wrapper created_at is not a valid UTC RFC3339 timestamp")
     encoded = payload.get("document")
     if not isinstance(encoded, str):
         raise NadiError("wrapper document is not a string")
+    # Canonical base64url without padding: charset-only plus canonical round trip.
+    if not _B64URL_RE.match(encoded) or "=" in encoded:
+        raise NadiError("wrapper document is not canonical base64url")
     try:
         document_bytes = crypto.b64url_decode(encoded)
     except ValueError as exc:
         raise NadiError(f"malformed base64url document: {exc}") from exc
+    if crypto.b64url_encode(document_bytes) != encoded:
+        raise NadiError("wrapper document is not canonical base64url")
     declared_digest = payload.get("document_sha256")
+    if not isinstance(declared_digest, str) or not _DIGEST_RE.match(declared_digest):
+        raise NadiError("wrapper document_sha256 is not a sha256:<hex> digest")
     if declared_digest != canonical.digest_bytes(document_bytes):
         raise NadiError("wrapper document_sha256 does not match document bytes")
     return message_id, document_bytes, source_node_id
@@ -199,6 +235,9 @@ class NadiTransport(Transport):
     mailbox address. ``routes`` maps remote FAW node IDs to remote relay
     addresses. ``backend`` performs relay publication and fetch; no default
     route exists.
+
+    Outbox staging uses a commit marker: ``.msg`` + ``.meta`` + ``.ready``
+    (last), so a crash can never make an incomplete record appear ready.
     """
 
     def __init__(
@@ -230,7 +269,8 @@ class NadiTransport(Transport):
         relay_target = self.routes.get(destination)
         message_id = str(uuid.uuid4())
         if relay_target is None:
-            # Fail closed: stage nothing publishable; retain the message.
+            # Fail closed: stage a complete but unrouted record; nothing is
+            # published. The staged message is retained.
             self._stage(message_id, document, destination, relay_target=None)
             return TransportSendResult(
                 message_id=message_id,
@@ -252,10 +292,14 @@ class NadiTransport(Transport):
             payload=wrapper,
         )
         results = self.backend.publish([envelope])
-        matched = [r for r in results if r.message_id == message_id]
-        if len(matched) != 1:
-            return TransportSendResult(message_id=message_id, ok=False, error="missing/duplicate publish result")
-        result = matched[0]
+        # Exact correspondence: exactly one result total, for the attempted ID.
+        if len(results) != 1 or results[0].message_id != message_id:
+            return TransportSendResult(
+                message_id=message_id,
+                ok=False,
+                error=f"invalid publish result set: {[r.message_id for r in results]}",
+            )
+        result = results[0]
         if result.ok:
             self._outbox_mark_delivered(message_id)
             return TransportSendResult(message_id=message_id, ok=True)
@@ -267,15 +311,24 @@ class NadiTransport(Transport):
                 continue
             if self._is_suppressed(envelope.message_id):
                 continue
+            # Outer relay boundary: the envelope must be addressed to the local
+            # relay address, with valid outer source/destination grammar.
+            if envelope.destination_address != self.relay_address:
+                self._record_failed(envelope.message_id,
+                                    f"outer destination {envelope.destination_address!r} != local relay {self.relay_address!r}")
+                continue
+            if not _valid_relay_address(envelope.source_address) or not _valid_relay_address(envelope.destination_address):
+                self._record_failed(envelope.message_id, "invalid outer relay address grammar")
+                continue
             try:
                 wrapper_message_id, document_bytes, source_node_id = unwrap_document(
                     envelope.payload,
                     local_node_id=self.node_id,
-                    local_relay_address=self.relay_address,
                     outer_message_id=envelope.message_id,
                 )
             except NadiError as exc:
                 self._record_failed(envelope.message_id, str(exc))
+                self._record_relay_evidence(envelope.message_id, envelope)
                 continue
             self._import(wrapper_message_id, envelope, document_bytes, source_node_id)
         return self._list_inbox()
@@ -288,9 +341,17 @@ class NadiTransport(Transport):
         (self.inbox_dir / f"{transport_message_id}.meta").unlink(missing_ok=True)
 
     def nack(self, transport_message_id: str, reason: str) -> None:
-        self._record_failed(transport_message_id, reason)
-        (self.inbox_dir / f"{transport_message_id}.msg").unlink(missing_ok=True)
-        (self.inbox_dir / f"{transport_message_id}.meta").unlink(missing_ok=True)
+        # Preserve actual failed evidence before removing inbox copies.
+        msg = self.inbox_dir / f"{transport_message_id}.msg"
+        meta = self.inbox_dir / f"{transport_message_id}.meta"
+        if msg.exists():
+            _atomic_write(self.failed_dir / f"{transport_message_id}.msg", msg.read_bytes())
+        if meta.exists():
+            _atomic_write(self.failed_dir / f"{transport_message_id}.meta", meta.read_bytes())
+        _atomic_write(self.failed_dir / f"{transport_message_id}.nack",
+                      json.dumps({"message_id": transport_message_id, "reason": reason}).encode())
+        msg.unlink(missing_ok=True)
+        meta.unlink(missing_ok=True)
 
     # -- internal helpers ---------------------------------------------------
 
@@ -303,10 +364,12 @@ class NadiTransport(Transport):
         }
         _atomic_write(self.outbox_dir / f"{message_id}.msg", document)
         _atomic_write(self.outbox_dir / f"{message_id}.meta", json.dumps(meta).encode())
+        # Commit marker last: a crash before this leaves the record incomplete.
+        _atomic_write(self.outbox_dir / f"{message_id}.ready", b"ready")
 
     def _outbox_mark_delivered(self, message_id: str) -> None:
-        (self.outbox_dir / f"{message_id}.msg").unlink(missing_ok=True)
-        (self.outbox_dir / f"{message_id}.meta").unlink(missing_ok=True)
+        for suffix in (".msg", ".meta", ".ready"):
+            (self.outbox_dir / f"{message_id}{suffix}").unlink(missing_ok=True)
 
     def _is_suppressed(self, message_id: str) -> bool:
         return (self.acknowledged_dir / f"{message_id}.ack").exists() or (
@@ -317,12 +380,23 @@ class NadiTransport(Transport):
         _atomic_write(self.failed_dir / f"{message_id}.nack",
                       json.dumps({"message_id": message_id, "reason": reason}).encode())
 
+    def _record_relay_evidence(self, message_id: str, envelope: RelayEnvelope) -> None:
+        evidence = {
+            "message_id": envelope.message_id,
+            "source_address": envelope.source_address,
+            "destination_address": envelope.destination_address,
+            "operation": envelope.operation,
+            "payload": envelope.payload,
+        }
+        _atomic_write(self.failed_dir / f"{message_id}.relay.json",
+                      json.dumps(evidence).encode())
+
     def _import(self, message_id: str, envelope: RelayEnvelope, document_bytes: bytes, source_node_id: str) -> None:
         msg_path = self.inbox_dir / f"{message_id}.msg"
         if msg_path.exists():
             # Idempotent for identical bytes; integrity conflict otherwise.
             if msg_path.read_bytes() != document_bytes:
-                self._record_failed(message_id, "same message ID with different bytes")
+                self._quarantine_conflict(message_id, envelope, document_bytes, msg_path)
             return
         meta = {
             "message_id": message_id,
@@ -333,12 +407,30 @@ class NadiTransport(Transport):
         _atomic_write(msg_path, document_bytes)
         _atomic_write(self.inbox_dir / f"{message_id}.meta", json.dumps(meta).encode())
 
+    def _quarantine_conflict(self, message_id: str, envelope: RelayEnvelope, incoming: bytes, msg_path: Path) -> None:
+        """Same ID with different bytes: quarantine inbox copies, preserve evidence."""
+        reason = f"same message ID {message_id} with different bytes"
+        self._record_failed(message_id, reason)
+        # Preserve the original inbox bytes + metadata under failed/.
+        _atomic_write(self.failed_dir / f"{message_id}.msg", msg_path.read_bytes())
+        meta_path = msg_path.with_suffix(".meta")
+        if meta_path.exists():
+            _atomic_write(self.failed_dir / f"{message_id}.meta", meta_path.read_bytes())
+        # Preserve the incoming conflicting envelope evidence.
+        self._record_relay_evidence(message_id, envelope)
+        # Remove the inbox copy: never expose the old message again.
+        msg_path.unlink(missing_ok=True)
+        meta_path.unlink(missing_ok=True)
+
     def _list_inbox(self) -> list[TransportEnvelope]:
         envelopes: list[TransportEnvelope] = []
         for path in sorted(self.inbox_dir.glob("*.msg")):
             if path.name.startswith(".tmp-"):
                 continue
             message_id = path.stem
+            # Fail-closed guard: acknowledged or failed IDs never surface.
+            if self._is_suppressed(message_id):
+                continue
             meta: dict[str, Any] = {}
             meta_path = path.with_suffix(".meta")
             if meta_path.exists():
@@ -353,3 +445,9 @@ class NadiTransport(Transport):
                 source=meta.get("source"),
             ))
         return envelopes
+
+
+def _valid_relay_address(address: str) -> bool:
+    from .nadi_github import is_valid_relay_address
+
+    return is_valid_relay_address(address)

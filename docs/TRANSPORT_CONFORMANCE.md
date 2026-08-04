@@ -58,7 +58,8 @@ and PR.
 
 Nadi-specific acceptance items (distinct relay address, differing local
 FAW/relay identity, missing-route retention, wrong-destination quarantine,
-relay-source independence, no credentials in manifests) are proven by the
+relay-source independence, no credentials in manifests, failed-evidence
+preservation, same-ID conflict quarantine, atomic staging) are proven by the
 Nadi adapter's own focused tests; they do not become shared filesystem
 properties.
 

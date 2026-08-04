@@ -114,9 +114,13 @@ A future `nadi_compat` transport adapter (in `transports/nadi.py`) MUST:
 9. **Suppress already-acknowledged remote messages** when the GitHub mailbox
    is read again; repeated remote mailbox contents are expected and safe.
 10. **Own local durable state** (`outbox/`, `inbox/`, `failed/`,
-    `acknowledged/`): stage one exact document before remote publication;
-    remove only the specifically confirmed published message; retain every
-    failed or unconfirmed message.
+    `acknowledged/`): stage one exact document before remote publication
+    (`.msg` + `.meta` + `.ready` commit marker, written last); remove only
+    the specifically confirmed published message; retain every failed or
+    unconfirmed message. `nack()` preserves the exact document bytes, inbox
+    metadata, and reason under `failed/`; a same-ID different-bytes conflict
+    quarantines the inbox copy and preserves both the original bytes and the
+    incoming conflicting envelope evidence.
 
 
 ## Nadi-specific acceptance items
