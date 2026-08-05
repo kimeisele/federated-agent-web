@@ -22,7 +22,7 @@ python -m pytest -q tests/test_transport_contract.py
 | Transport | Shared contract suite | Live network evidence |
 |---|---:|---:|
 | Filesystem | pass | not applicable |
-| Nadi/GitHub | pass against stub | not performed |
+| Nadi/GitHub | pass against stub | performed (controlled rehearsal, see `NADI_LIVE_REHEARSAL.md`) |
 
 The suite currently registers two cases (`filesystem_transport_case` and
 `nadi_stub_transport_case`); the same 10 properties run against both —
@@ -41,18 +41,19 @@ The suite currently registers two cases (`filesystem_transport_case` and
 9. signed delegation/receipt round trip through the core;
 10. no transport authority (source metadata never changes document validity).
 
-## Future v0.4 gate
+## v0.4 gate
 
-The eventual v0.4 evidence sequence:
+The v0.4 evidence sequence:
 
 1. shared suite passes against the filesystem adapter;
 2. the unchanged shared suite passes against a stubbed Nadi relay;
 3. a controlled live GitHub rehearsal between `kimeisele` and
-   `federation-operator` provides relay-conformance evidence;
+   `federation-operator` provided relay-conformance evidence (see
+   `NADI_LIVE_REHEARSAL.md`);
 4. no claim that the controlled rehearsal is an independent external pilot.
 
-v0.4 is not marked complete by this slice; the Nadi adapter is a later issue
-and PR.
+v0.4 is not marked complete by this slice; the milestone gate requires
+human review of the rehearsal evidence.
 
 ## Simulated relay conformance versus live GitHub evidence
 
