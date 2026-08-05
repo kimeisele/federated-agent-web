@@ -2,8 +2,8 @@
 
 Controlled cross-account rehearsal of the experimental Nadi/GitHub transport
 adapter against the real GitHub Contents API, using two separately
-authenticated accounts (`kimeisele`, `federation-operator`) and an
-adopter-owned public relay repository.
+authenticated accounts (`kimeisele`, `federation-operator`) and a
+maintainer-controlled second-account public relay repository.
 
 This is controlled evidence for the v0.4 transport-independence claim. It is
 not an independent second implementation, an external pilot, evidence of
@@ -96,8 +96,9 @@ Identifiers (Attempt B):
    `1fb66236-13cf-4f35-af5c-382a7c8b4872`.
 4. **Mailbox confirmed:** `nadi/kim-live_to_federation-operator-live.json`
    (blob SHA `f7fbd107d91c4252877f13d9a9f52b323e3dfaa1`).
-5. **Fetch as `federation-operator`** (GH_TOKEN removed; keyring account
-   confirmed before the write).
+5. **Fetch as `federation-operator`** (GH_TOKEN removed;
+   `federation-operator` keyring authentication was active for all
+   executor-side GitHub operations).
 6. **Exact byte digest equality:** fetched delegation bytes SHA-256 equals
    the published bytes SHA-256 (`sha256:38745f4a…`); equality confirmed.
 7. **Verify and admit through the FAW core:** `verify()` with expected kind
@@ -115,9 +116,9 @@ Identifiers (Attempt B):
     `1fb66236-…4872.ack` written.
 12. **Reread + suppression:** mailbox reread yields **0 envelopes**; the
     remote entry was not deleted.
-13. **Publish receipt as `federation-operator`** (authenticated login
-    confirmed before the write). `send_ok: true`, transport message
-    `10f2383c-a217-46a6-afba-1aa03d295e58`.
+13. **Publish receipt as `federation-operator`** (login confirmed again
+    immediately before the receipt publication). `send_ok: true`, transport
+    message `10f2383c-a217-46a6-afba-1aa03d295e58`.
 14. **Mailbox confirmed:** `nadi/federation-operator-live_to_kim-live.json`
     (blob SHA `aba866e6ad0308c317257c02eb88c716e4a6baa0`).
 15. **Fetch receipt as `kimeisele`.**
@@ -175,6 +176,16 @@ issuer receipt flow 2.5 s), excluding evidence capture API calls.
 - Relay metadata never granted authority: the embedded signed FAW documents
   are the sole authority-bearing objects (ADR 0001).
 - No runtime code, protocol, schema, or version change was made.
+
+## Credential and access cleanup
+
+- Temporary `kimeisele` collaborator access to the relay repository was
+  removed after evidence capture.
+- The human operator confirmed deletion of the temporary
+  `public_repo`-scoped classic PAT on 2026-08-05.
+- The evidence-finalization session ran without `GH_TOKEN` in its environment.
+- The public relay repository and its two mailbox entries were retained as
+  controlled evidence.
 
 ## Scope statement
 

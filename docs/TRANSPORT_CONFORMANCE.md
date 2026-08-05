@@ -22,7 +22,7 @@ python -m pytest -q tests/test_transport_contract.py
 | Transport | Shared contract suite | Live network evidence |
 |---|---:|---:|
 | Filesystem | pass | not applicable |
-| Nadi/GitHub | pass against stub | performed (controlled rehearsal, see `NADI_LIVE_REHEARSAL.md`) |
+| Nadi/GitHub | pass against stub | controlled cross-account pass |
 
 The suite currently registers two cases (`filesystem_transport_case` and
 `nadi_stub_transport_case`); the same 10 properties run against both —
@@ -52,8 +52,13 @@ The v0.4 evidence sequence:
    `NADI_LIVE_REHEARSAL.md`);
 4. no claim that the controlled rehearsal is an independent external pilot.
 
-v0.4 is not marked complete by this slice; the milestone gate requires
-human review of the rehearsal evidence.
+The v0.4 transport-independence gate is complete: the same shared contract
+suite passes against both registered transports, and the Nadi/GitHub adapter
+completed the controlled live rehearsal documented in
+`NADI_LIVE_REHEARSAL.md`.
+
+This remains controlled maintainer evidence. It is not an independent second
+implementation or external pilot.
 
 ## Simulated relay conformance versus live GitHub evidence
 
