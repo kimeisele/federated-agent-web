@@ -4,25 +4,36 @@
 The kit is the bounded, hash-verified input set for a clean-room second
 implementation (see docs/V0_5_CLEAN_ROOM_PROTOCOL.md and ADR 0002).
 
+The build is content-hermetic with respect to the allowlist and the
+byte-exact manifest: files outside the allowlist do not affect or enter the
+archive. The builder does not attempt to prove that the complete Git
+worktree is clean.
+
 Guarantees:
-- no network operation;
-- no subprocess; pure Python standard library;
+- no network operation; no subprocess; pure Python standard library;
 - every listed file verified by exact byte size and SHA-256 against
   interop/v0.2/INPUT_MANIFEST.json;
-- missing, extra, changed, or symlinked allowlisted files are rejected;
+- manifest structure validated strictly (required keys, unknown members
+  rejected, fixed allowlist, classification set, normalized paths);
+- every existing file under schemas/ and vectors/ must be listed; every
+  required fixed file (including LICENSE) must be listed; omission is a
+  build failure;
+- only listed files plus the manifest itself enter the archive;
 - deterministic tar.gz: sorted members, POSIX separators, uid/gid zero,
   empty owner/group names, fixed permissions, mtime zero, gzip mtime zero;
-- forbidden prefixes and Python filenames are rejected both from the
-  manifest paths and from the produced archive members.
+- the completed archive is scanned again for forbidden, unsafe, or Python
+  members.
 
-The manifest cannot hash itself recursively; the manifest's own digest and
-the archive digest are defined externally by this build's printed output.
+Four-part provenance is printed by every build:
 
-The repository-state check requires a clean worktree. Allowlisted content
-must be byte-identical to the manifest (which pins the recorded source
-commit). The current HEAD SHA is printed; when HEAD differs from the
-recorded source commit the build still succeeds only because the checked-out
-allowlisted bytes are verified identical to the pinned ones.
+    reference_material_commit   the frozen FAW material commit (manifest)
+    build_head_sha              the repository state the kit was assembled
+                                from (resolved from .git, no subprocess)
+    manifest_sha256             the exact external manifest bytes
+    archive_sha256              the complete delivered archive
+
+The manifest cannot hash itself recursively; its own digest and the archive
+digest are defined externally by this build's printed output.
 """
 
 from __future__ import annotations
@@ -32,7 +43,6 @@ import gzip
 import hashlib
 import io
 import json
-import os
 import re
 import stat
 import sys
@@ -41,53 +51,72 @@ from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_RELPATH = "interop/v0.2/INPUT_MANIFEST.json"
+ARCHIVE_NAME = "faw-v0.2-implementer-kit.tar.gz"
+SOURCE_REPOSITORY = "kimeisele/federated-agent-web"
 
-# Fixed allowlisted files (protocol §2). Directories schemas/** and vectors/**
-# are matched by listing. LICENSE is reserved in the protocol allowlist but
-# the repository ships none at the recorded source commit (documented
-# exception); the manifest does not list it.
+# Required fixed allowlisted files; each MUST be listed in the manifest.
 FIXED_ALLOWED = {
     "SPEC.md",
     "docs/federated-agent-web-build-spec-v0.2.md",
     "SECURITY.md",
+    "LICENSE",
     "docs/V0_5_IMPLEMENTER_BRIEF.md",
     MANIFEST_RELPATH,
 }
 ALLOWED_DIRS = ("schemas", "vectors")
+ALLOWED_CLASSIFICATIONS = {
+    "normative",
+    "normative-summary",
+    "conformance-fixture",
+    "non-normative-guidance",
+    "license",
+}
+REQUIRED_TOP_LEVEL = {
+    "format_version",
+    "faw_spec_version",
+    "source_repository",
+    "reference_material_commit",
+    "files",
+    "forbidden_prefixes",
+    "generated_archive_name",
+}
+ENTRY_KEYS = {"path", "sha256", "size_bytes", "classification", "reason"}
 
-# Always-ignored platform metadata that is not repository content.
-_ALWAYS_IGNORED = {".DS_Store"}
+_SHA256_RE = re.compile(r"^[0-9a-f]{64}$")
+_COMMIT_RE = re.compile(r"^[0-9a-f]{40}$")
 
 
 class KitBuildError(Exception):
     """Raised for any precondition or verification failure."""
 
 
-def _blob_sha(content: bytes) -> str:
-    """Git blob object SHA-1 (what the index stores), for a regular file."""
-    return hashlib.sha1(b"blob %d\x00" % len(content) + content).hexdigest()
-
-
 # ---------------------------------------------------------------------------
-# Repository state (no subprocess; reads .git directly)
+# Provenance: HEAD resolution (no subprocess)
 # ---------------------------------------------------------------------------
 
-def _read_git_head(root: Path) -> str | None:
+def read_head_sha(root: Path) -> str:
+    """Return the current Git HEAD SHA, resolving .git indirection.
+
+    Supports ordinary clones (`.git/` directory), detached HEAD, loose refs,
+    and packed refs. Raises KitBuildError when HEAD cannot be determined so
+    the build never emits incomplete provenance. The Git index is not
+    parsed.
+    """
     git_dir = root / ".git"
-    if git_dir.is_file():  # worktree indirection: "gitdir: <path>"
+    if git_dir.is_file():
         try:
             target = git_dir.read_text().strip()
             if target.startswith("gitdir:"):
                 git_dir = Path(target.split(":", 1)[1].strip())
                 if not git_dir.is_absolute():
                     git_dir = root / git_dir
-        except OSError:
-            return None
+        except OSError as exc:
+            raise KitBuildError(f"cannot read .git indirection: {exc}") from exc
     head_file = git_dir / "HEAD"
     try:
         head = head_file.read_text().strip()
-    except OSError:
-        return None
+    except OSError as exc:
+        raise KitBuildError(f"cannot determine repository HEAD: {exc}") from exc
     if head.startswith("ref:"):
         ref = head.split(":", 1)[1].strip()
         loose = git_dir / ref
@@ -105,196 +134,10 @@ def _read_git_head(root: Path) -> str | None:
                     return sha
         except OSError:
             pass
-        return None
-    return head
-
-
-def _parse_index(root: Path) -> list[tuple[str, int, str]]:
-    """Parse .git/index (versions 2/3/4) into (path, mode, blob_sha) tuples.
-
-    Only stage-0 entries are returned; entries at other stages mean an
-    unresolved merge and are reported as a dirty state by the caller.
-    """
-    index = root / ".git" / "index"
-    try:
-        data = index.read_bytes()
-    except OSError:
-        return []
-    if data[:4] != b"DIRC":
-        raise KitBuildError("unrecognized git index header")
-    version = int.from_bytes(data[4:8], "big")
-    if version not in (2, 3, 4):
-        raise KitBuildError(f"unsupported git index version {version}")
-    count = int.from_bytes(data[8:12], "big")
-    pos = 12
-    entries: list[tuple[str, str, int]] = []  # (path, sha, mode)
-    prev_path = ""
-    for _ in range(count):
-        if pos + 62 > len(data):
-            raise KitBuildError("truncated git index")
-        mode = int.from_bytes(data[pos + 24: pos + 28], "big")
-        sha = data[pos + 40: pos + 60].hex()
-        flags = int.from_bytes(data[pos + 60: pos + 62], "big")
-        if version == 4:
-            # prefix-compressed path: varint prefix length, NUL-terminated suffix
-            cur = pos + 62
-            prefix_len = 0
-            shift = 0
-            while True:
-                b = data[cur]
-                cur += 1
-                prefix_len |= (b & 0x7F) << shift
-                shift += 7
-                if not (b & 0x80):
-                    break
-            end = data.index(b"\x00", cur)
-            path = prev_path[:prefix_len] + data[cur:end].decode("utf-8", "replace")
-            pos = end + 1  # index v4 entries carry no padding
-        else:
-            end = data.index(b"\x00", pos + 62)
-            path = data[pos + 62: end].decode("utf-8", "replace")
-            pos = end + 1
-            pos += (8 - ((pos - 12) % 8)) % 8
-        if (flags & 0x4000) and version >= 3:
-            pos += 2  # extended flags
-        prev_path = path
-        stage = (flags >> 12) & 0x3
-        if stage == 0:
-            entries.append((path, sha, mode))
-    return entries
-
-
-def _load_gitignore(root: Path) -> list[str]:
-    try:
-        return (root / ".gitignore").read_text().splitlines()
-    except OSError:
-        return []
-
-
-def _is_ignored(relpath: str, is_dir: bool, patterns: list[str]) -> bool:
-    """Apply a compact gitignore subset (last match wins, '!' negation).
-
-    Supports: blank/comment lines, trailing '/' dir-only patterns, leading
-    '/' anchoring, no-slash patterns matching any depth, fnmatch globs on
-    basename or full relative path (no-slash patterns never cross '/'),
-    and '!' negation. This covers the patterns used by this repository.
-    """
-    ignored = False
-    parts = relpath.split("/")
-    for raw in patterns:
-        line = raw.strip()
-        if not line or line.startswith("#"):
-            continue
-        negate = line.startswith("!")
-        if negate:
-            line = line[1:].lstrip()
-        dir_only = line.endswith("/")
-        if dir_only:
-            line = line.rstrip("/")
-        anchored = line.startswith("/")
-        if anchored:
-            line = line.lstrip("/")
-        matched = False
-        if "/" in line:
-            if not anchored and not line.startswith("**/"):
-                # slash pattern without anchor matches from the ignore-file dir
-                pass
-            matched = re.match(_glob_to_regex(line), relpath) is not None
-        else:
-            if dir_only:
-                matched = any(re.match(_glob_to_regex(line), p) is not None for p in parts)
-            else:
-                matched = re.match(_glob_to_regex(line), parts[-1]) is not None
-        if matched:
-            ignored = not negate
-    return ignored
-
-
-def _glob_to_regex(pattern: str) -> str:
-    parts = []
-    i = 0
-    while i < len(pattern):
-        c = pattern[i]
-        if c == "*":
-            if i + 1 < len(pattern) and pattern[i + 1] == "*":
-                parts.append(".*")
-                i += 2
-                if i < len(pattern) and pattern[i] == "/":
-                    i += 1
-                continue
-            parts.append("[^/]*")
-        elif c == "?":
-            parts.append("[^/]")
-        elif c in "[]":
-            j = i + 1
-            if j < len(pattern) and pattern[j] in "!^":
-                j += 1
-            if j < len(pattern) and pattern[j] == "]":
-                j += 1
-            while j < len(pattern) and pattern[j] != "]":
-                j += 1
-            if j < len(pattern):
-                cls = pattern[i + 1:j]
-                if cls.startswith("!"):
-                    cls = "^" + cls[1:]
-                parts.append("[" + cls + "]")
-                i = j
-            else:
-                parts.append(re.escape(c))
-        else:
-            parts.append(re.escape(c))
-        i += 1
-    return "^" + "".join(parts) + "$"
-
-
-def _scan_untracked(root: Path, tracked: set[str], patterns: list[str]) -> list[str]:
-    untracked: list[str] = []
-    for dirpath, dirnames, filenames in os.walk(root, followlinks=False):
-        rel_dir = os.path.relpath(dirpath, root)
-        if rel_dir == ".":
-            rel_dir = ""
-        for dname in list(dirnames):
-            rel = f"{rel_dir}/{dname}" if rel_dir else dname
-            if rel == ".git":
-                dirnames.remove(dname)
-                continue
-            if dname in _ALWAYS_IGNORED or _is_ignored(rel, True, patterns):
-                dirnames.remove(dname)
-        for fname in filenames:
-            rel = f"{rel_dir}/{fname}" if rel_dir else fname
-            if fname in _ALWAYS_IGNORED or _is_ignored(rel, False, patterns):
-                continue
-            if rel not in tracked:
-                untracked.append(rel)
-    return untracked
-
-
-def check_repository_state(root: Path, manifest: dict) -> str:
-    """Return the current HEAD SHA after asserting a clean worktree."""
-    head = _read_git_head(root)
-    if head is None:
-        raise KitBuildError("could not determine repository HEAD")
-
-    entries = _parse_index(root)
-    tracked = {p for p, _sha, _mode in entries}
-    for path, sha, mode in entries:
-        if mode & 0o170000 not in (0o100000, 0o120000):
-            raise KitBuildError(f"tracked file has unsupported mode: {path}")
-        f = root / path
-        if not f.exists():
-            raise KitBuildError(f"tracked file missing from worktree: {path}")
-        if f.is_symlink():
-            raise KitBuildError(f"tracked file is a symlink: {path}")
-        content = f.read_bytes()
-        if _blob_sha(content) != sha:
-            raise KitBuildError(f"tracked file modified in worktree: {path}")
-
-    untracked = _scan_untracked(root, tracked, _load_gitignore(root))
-    if untracked:
-        raise KitBuildError(
-            "worktree not clean; untracked files: " + ", ".join(sorted(untracked)[:10])
-        )
-    return head
+        raise KitBuildError(f"cannot resolve repository HEAD ref: {ref}")
+    if _COMMIT_RE.fullmatch(head):
+        return head
+    raise KitBuildError("repository HEAD is neither a ref nor a commit SHA")
 
 
 # ---------------------------------------------------------------------------
@@ -312,29 +155,69 @@ def load_and_validate_manifest(root: Path) -> dict:
         manifest = json.loads((root / MANIFEST_RELPATH).read_text())
     except (OSError, json.JSONDecodeError) as exc:
         raise KitBuildError(f"cannot read manifest: {exc}") from exc
+    if not isinstance(manifest, dict):
+        raise KitBuildError("manifest must be a JSON object")
 
-    if manifest.get("format_version") != 1:
+    unknown = set(manifest) - REQUIRED_TOP_LEVEL
+    if unknown:
+        raise KitBuildError(f"manifest contains unknown top-level members: {sorted(unknown)}")
+    missing = REQUIRED_TOP_LEVEL - set(manifest)
+    if missing:
+        raise KitBuildError(f"manifest missing required members: {sorted(missing)}")
+
+    if manifest["format_version"] != 1:
         raise KitBuildError("manifest format_version must be 1")
-    if manifest.get("faw_spec_version") != "0.2":
+    if manifest["faw_spec_version"] != "0.2":
         raise KitBuildError("manifest faw_spec_version must be 0.2")
-    source_commit = manifest.get("source_commit")
-    if not isinstance(source_commit, str) or len(source_commit) != 40:
-        raise KitBuildError("manifest source_commit must be a 40-char SHA")
-    if not isinstance(manifest.get("forbidden_prefixes"), list):
-        raise KitBuildError("manifest forbidden_prefixes must be a list")
-    if not isinstance(manifest.get("files"), list):
-        raise KitBuildError("manifest files must be a list")
+    if manifest["source_repository"] != SOURCE_REPOSITORY:
+        raise KitBuildError(
+            f"manifest source_repository must be {SOURCE_REPOSITORY!r}"
+        )
+    reference_commit = manifest["reference_material_commit"]
+    if not _COMMIT_RE.fullmatch(reference_commit):
+        raise KitBuildError(
+            "manifest reference_material_commit must be 40 lowercase hex characters"
+        )
+    if manifest["generated_archive_name"] != ARCHIVE_NAME:
+        raise KitBuildError(
+            f"manifest generated_archive_name must be exactly {ARCHIVE_NAME!r}"
+        )
 
+    forbidden = manifest["forbidden_prefixes"]
+    if not isinstance(forbidden, list) or not forbidden:
+        raise KitBuildError("manifest forbidden_prefixes must be a non-empty list")
+    for prefix in forbidden:
+        if not isinstance(prefix, str) or not prefix:
+            raise KitBuildError("forbidden prefix must be a non-empty string")
+        if prefix != prefix.strip():
+            raise KitBuildError(f"forbidden prefix not normalized: {prefix!r}")
+        if prefix.startswith(("/", "./")) or "\\" in prefix or ".." in Path(prefix).parts:
+            raise KitBuildError(f"forbidden prefix not normalized: {prefix!r}")
+    if len(set(forbidden)) != len(forbidden):
+        raise KitBuildError("forbidden_prefixes must be unique")
+
+    files = manifest["files"]
+    if not isinstance(files, list) or not files:
+        raise KitBuildError("manifest files must be a non-empty list")
     paths: list[str] = []
-    for entry in manifest["files"]:
+    for entry in files:
+        if not isinstance(entry, dict):
+            raise KitBuildError(f"manifest file entry must be an object: {entry!r}")
+        if set(entry) != ENTRY_KEYS:
+            raise KitBuildError(
+                f"manifest file entry keys must be exactly {sorted(ENTRY_KEYS)}: {entry!r}"
+            )
         for field in ("path", "sha256", "classification", "reason"):
-            if not isinstance(entry.get(field), str) or not entry[field]:
-                raise KitBuildError(f"manifest entry missing field {field!r}: {entry!r}")
-        size_bytes = entry.get("size_bytes")
-        if not isinstance(size_bytes, int) or size_bytes < 0:
+            if not isinstance(entry[field], str) or not entry[field]:
+                raise KitBuildError(f"manifest entry field {field!r} invalid: {entry!r}")
+        if not isinstance(entry["size_bytes"], int) or entry["size_bytes"] < 0:
             raise KitBuildError(f"manifest entry size_bytes invalid: {entry!r}")
-        if not re.fullmatch(r"[0-9a-f]{64}", entry["sha256"]):
+        if not _SHA256_RE.fullmatch(entry["sha256"]):
             raise KitBuildError(f"manifest entry sha256 invalid: {entry!r}")
+        if entry["classification"] not in ALLOWED_CLASSIFICATIONS:
+            raise KitBuildError(
+                f"manifest entry classification not in documented set: {entry!r}"
+            )
         paths.append(entry["path"])
 
     if paths != sorted(paths):
@@ -349,7 +232,7 @@ def load_and_validate_manifest(root: Path) -> dict:
             raise KitBuildError(f"path traversal in manifest: {p}")
         if not _is_allowlisted(p):
             raise KitBuildError(f"path outside allowlist: {p}")
-        for prefix in manifest["forbidden_prefixes"]:
+        for prefix in forbidden:
             if p.startswith(prefix):
                 raise KitBuildError(f"path matches forbidden prefix {prefix!r}: {p}")
         if p.endswith((".py", ".pyc", ".pyo")):
@@ -358,23 +241,18 @@ def load_and_validate_manifest(root: Path) -> dict:
 
 
 def check_allowlist_complete(root: Path, manifest: dict) -> None:
-    """Every allowlisted file that exists must be accounted for (manifest or
-    the manifest itself); nothing may be silently extra."""
-    listed = {e["path"] for e in manifest["files"]} | {MANIFEST_RELPATH}
-    expected = set(FIXED_ALLOWED)
+    """Every required fixed file must be listed; every existing file under
+    schemas/ and vectors/ must be listed. Nothing may be silently extra."""
+    listed = {e["path"] for e in manifest["files"]}
+    for fixed in sorted(FIXED_ALLOWED - {MANIFEST_RELPATH}):
+        if fixed not in listed:
+            raise KitBuildError(f"required fixed file missing from manifest: {fixed}")
     for prefix in ALLOWED_DIRS:
         for f in sorted((root / prefix).rglob("*")):
             if f.is_file():
-                expected.add(str(f.relative_to(root)))
-    for p in sorted(expected):
-        if p in listed:
-            continue
-        if p == "LICENSE":
-            continue  # documented exception: repository ships no LICENSE
-        raise KitBuildError(f"allowlisted file missing from manifest: {p}")
-    for p in listed:
-        if not (root / p).exists():
-            raise KitBuildError(f"listed file missing from repository: {p}")
+                rel = str(f.relative_to(root))
+                if rel not in listed:
+                    raise KitBuildError(f"allowlisted file missing from manifest: {rel}")
 
 
 def verify_entries(root: Path, manifest: dict) -> list[dict]:
@@ -382,7 +260,12 @@ def verify_entries(root: Path, manifest: dict) -> list[dict]:
     verified = []
     for entry in manifest["files"]:
         p = root / entry["path"]
-        st = p.lstat()
+        try:
+            st = p.lstat()
+        except FileNotFoundError:
+            raise KitBuildError(
+                f"listed file missing from repository: {entry['path']}"
+            ) from None
         if stat.S_ISLNK(st.st_mode):
             raise KitBuildError(f"allowlisted file is a symlink: {entry['path']}")
         if not stat.S_ISREG(st.st_mode):
@@ -405,7 +288,11 @@ def verify_entries(root: Path, manifest: dict) -> list[dict]:
 # ---------------------------------------------------------------------------
 
 def build_archive(root: Path, verified: list[dict], manifest: dict) -> bytes:
-    """Build the deterministic tar.gz and return its bytes."""
+    """Build the deterministic tar.gz and return its bytes.
+
+    Only the verified listed files plus the manifest itself enter the
+    archive; nothing else is read from the repository.
+    """
     members = list(verified)
     manifest_bytes = (root / MANIFEST_RELPATH).read_bytes()
     members.append({"path": MANIFEST_RELPATH, "bytes": manifest_bytes})
@@ -432,8 +319,8 @@ def build_archive(root: Path, verified: list[dict], manifest: dict) -> bytes:
 
 
 def verify_archive_members(archive_bytes: bytes, manifest: dict) -> int:
-    """Re-read the archive; enforce forbidden prefixes and safety. Returns
-    the member file count."""
+    """Re-read the archive; enforce forbidden prefixes and member safety.
+    Returns the member file count."""
     names: list[str] = []
     with tarfile.open(fileobj=io.BytesIO(archive_bytes), mode="r:gz") as tar:
         for member in tar.getmembers():
@@ -454,11 +341,19 @@ def verify_archive_members(archive_bytes: bytes, manifest: dict) -> int:
     return len(names)
 
 
-def build(output_dir: Path) -> dict:
-    root = ROOT
+# ---------------------------------------------------------------------------
+# Public build boundary
+# ---------------------------------------------------------------------------
+
+def build(output_dir: Path, *, root: Path = ROOT) -> dict:
+    """Build the implementer kit into output_dir from the kit root.
+
+    Every path is derived from the passed `root`, so isolated synthetic kit
+    roots can be tested without touching the real repository.
+    """
     manifest = load_and_validate_manifest(root)
-    source_commit = manifest["source_commit"]
-    head = check_repository_state(root, manifest)
+    reference_material_commit = manifest["reference_material_commit"]
+    build_head_sha = read_head_sha(root)
     check_allowlist_complete(root, manifest)
     verified = verify_entries(root, manifest)
 
@@ -466,21 +361,22 @@ def build(output_dir: Path) -> dict:
     file_count = verify_archive_members(archive_bytes, manifest)
 
     archive_name = manifest["generated_archive_name"]
-    if not isinstance(archive_name, str) or not archive_name.endswith(".tar.gz"):
-        raise KitBuildError("manifest generated_archive_name must end in .tar.gz")
-    output_dir.mkdir(parents=True, exist_ok=True)
+    output_dir = Path(output_dir)
     archive_path = output_dir / archive_name
+    if archive_path.parent.resolve() != output_dir.resolve():
+        raise KitBuildError("archive output path would escape output_dir")
+    output_dir.mkdir(parents=True, exist_ok=True)
     archive_path.write_bytes(archive_bytes)
 
-    manifest_digest = hashlib.sha256((root / MANIFEST_RELPATH).read_bytes()).hexdigest()
+    manifest_bytes = (root / MANIFEST_RELPATH).read_bytes()
     return {
-        "archive_path": str(archive_path),
+        "reference_material_commit": reference_material_commit,
+        "build_head_sha": build_head_sha,
+        "manifest_sha256": hashlib.sha256(manifest_bytes).hexdigest(),
         "archive_sha256": hashlib.sha256(archive_bytes).hexdigest(),
+        "archive_path": str(archive_path),
         "archive_size_bytes": len(archive_bytes),
         "file_count": file_count,
-        "source_commit": source_commit,
-        "head_sha": head,
-        "manifest_sha256": manifest_digest,
     }
 
 
@@ -498,13 +394,13 @@ def main(argv: list[str] | None = None) -> int:
     except KitBuildError as exc:
         print(f"ERROR: {exc}", file=sys.stderr)
         return 1
-    print(f"archive path:       {result['archive_path']}")
-    print(f"archive SHA-256:    {result['archive_sha256']}")
-    print(f"archive size bytes: {result['archive_size_bytes']}")
-    print(f"file count:         {result['file_count']}")
-    print(f"source commit:      {result['source_commit']}")
-    print(f"HEAD:               {result['head_sha']}")
-    print(f"manifest SHA-256:   {result['manifest_sha256']}")
+    print(f"archive path:               {result['archive_path']}")
+    print(f"reference_material_commit:  {result['reference_material_commit']}")
+    print(f"build_head_sha:             {result['build_head_sha']}")
+    print(f"manifest_sha256:            {result['manifest_sha256']}")
+    print(f"archive_sha256:             {result['archive_sha256']}")
+    print(f"archive size bytes:         {result['archive_size_bytes']}")
+    print(f"file count:                 {result['file_count']}")
     return 0
 
 

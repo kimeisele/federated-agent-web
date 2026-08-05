@@ -5,11 +5,15 @@ implementation and the machine checks that enforce them. It is the contract
 behind `interop/v0.2/INPUT_MANIFEST.json` and
 `scripts/build_v0_5_implementer_kit.py`.
 
-The recorded source commit of the reference material is:
+The frozen reference-material commit is:
 
 ```text
 bb85221c894473adfd17dceb2c7d3685d9e266ea
 ```
+
+It identifies the commit from which the normative specification, schemas,
+security guidance, and Golden Vector material were selected. It does not
+claim that every kit-administration file existed at that commit.
 
 ## 1. Purpose
 
@@ -34,10 +38,11 @@ docs/V0_5_IMPLEMENTER_BRIEF.md
 interop/v0.2/INPUT_MANIFEST.json
 ```
 
-`LICENSE` is reserved in this allowlist. The repository at the recorded
-source commit ships no license file; `pyproject.toml` declares MIT metadata.
-Until a license file is published, the kit omits `LICENSE` and this absence
-is recorded as a candidate erratum. The manifest does not list it.
+`LICENSE` is a required kit member: the repository publishes the MIT
+License (Copyright (c) 2026 Kim Eisele) at `LICENSE`, and the manifest lists
+it. Omission of `LICENSE` from the manifest or the repository is a build
+failure; the builder never silently skips it. License terms are never read
+from packaging metadata during kit construction.
 
 ## 3. Classification of allowed inputs
 
@@ -47,9 +52,14 @@ is recorded as a candidate erratum. The manifest does not list it.
 | `SPEC.md` | normative summary | condensed contract; conflicts lose to the governing specification |
 | `schemas/**` | normative (machine-readable) | JSON Schema constraints for the three normative document kinds |
 | `vectors/**` | conformance fixtures | static golden data: canonical bytes, digests, key material, signed documents |
+| `LICENSE` | license | terms governing copying, modification and redistribution of the kit materials |
 | `SECURITY.md` | non-normative guidance | disclosure and hygiene policy; no normative document semantics |
 | `docs/V0_5_IMPLEMENTER_BRIEF.md` | non-normative guidance | scope, verification order, CLI and result-format contract |
 | `interop/v0.2/INPUT_MANIFEST.json` | kit manifest | self-describing hash manifest; its own digest is defined externally by the build output |
+
+The documented finite classification set used by the manifest is:
+`normative`, `normative-summary`, `conformance-fixture`,
+`non-normative-guidance`, `license`. The builder rejects any other value.
 
 ## 4. Forbidden inputs
 
@@ -100,24 +110,34 @@ The future second implementation must not live inside
 
 `scripts/build_v0_5_implementer_kit.py` enforces:
 
-- execution from a clean repository whose allowlisted content matches the
-  manifest byte-for-byte at the recorded source commit;
-- manifest structural validity: sorted unique paths, no traversal, no
-  absolute paths, no symlinks, no file outside the allowlist, no
-  forbidden prefix;
-- exact byte size and SHA-256 for every listed file;
+- manifest structure is valid (required members present, unknown members
+  rejected, exact reference-material commit and archive name, normalized
+  unique forbidden prefixes, exact file-entry shape, documented
+  classification set);
+- every listed file is allowlisted;
+- every listed file is a regular non-symlink file;
+- every listed file matches its exact byte size and SHA-256;
+- every existing file under `schemas/` and `vectors/` is listed;
+- every required fixed file, including `LICENSE`, is listed;
+- only listed files plus the manifest enter the archive;
+- the completed archive is scanned again for unsafe or forbidden members;
 - deterministic archive construction: sorted members, normalized POSIX
   separators, uid/gid zero, empty owner/group names, fixed permissions,
   mtime zero, deterministic gzip header (mtime zero);
-- a final scan of the produced archive for forbidden prefixes and Python
-  filenames;
-- no network operation.
+- no network operation and no subprocess.
+
+The build is content-hermetic with respect to the allowlist and the
+byte-exact manifest. Files outside the allowlist do not affect or enter the
+archive. The builder does not claim to prove that the complete Git worktree
+is clean; it resolves and reports the current Git `HEAD` as provenance and
+fails if `HEAD` cannot be determined.
 
 `tests/test_v0_5_implementer_kit.py` proves each of these checks, that two
-builds are byte-identical, and that archive extraction cannot escape the
-destination directory.
+builds are byte-identical, that archive extraction cannot escape the
+destination directory, and that non-allowlisted contamination never enters
+the archive.
 
-## 7. Kit digest
+## 7. Provenance and kit digest
 
 The archive is named:
 
@@ -125,15 +145,23 @@ The archive is named:
 faw-v0.2-implementer-kit.tar.gz
 ```
 
-Its SHA-256 is not stored inside the manifest (the manifest cannot hash
-itself recursively). It is defined externally: the build command prints the
-archive digest, and that printed value is the authoritative kit digest to
-record in the future implementation report.
+Every build reports four-part provenance; the printed build output is the
+provenance attestation:
+
+```text
+reference_material_commit   the frozen FAW material commit
+build_head_sha              the repository state the kit was assembled from
+manifest_sha256             the exact external manifest bytes
+archive_sha256              the complete delivered archive
+```
+
+The manifest cannot hash itself recursively: `manifest_sha256` and
+`archive_sha256` are defined externally by the build output, and the
+`manifest_sha256` value is the authoritative external identity of the
+manifest bytes.
 
 ## 8. Handling of discovered deviations
 
-- The missing `LICENSE` file is a recorded deviation from the allowlist
-  draft and a candidate erratum.
 - Any normative contradiction found during implementation becomes a spec
   erratum issue; ambiguous-but-not-contradictory questions are listed in the
   implementer brief's ambiguity inventory.

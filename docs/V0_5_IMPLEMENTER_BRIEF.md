@@ -250,8 +250,9 @@ Every verification operation emits one JSON object on stdout:
   "implementation": "faw-verifier-go",
   "implementation_version": "0.1.0",
   "faw_spec_version": "0.2",
-  "kit_source_commit": "<sha>",
+  "kit_reference_material_commit": "<sha>",
   "kit_manifest_sha256": "sha256:<hex>",
+  "kit_archive_sha256": "sha256:<hex>",
   "operation": "verify-delegation",
   "ok": true,
   "reason_code": null,
@@ -259,6 +260,11 @@ Every verification operation emits one JSON object on stdout:
 }
 ```
 
+- `kit_reference_material_commit` is the frozen FAW reference-material commit
+  recorded in the kit manifest.
+- `kit_manifest_sha256` identifies the exact external manifest bytes;
+  `kit_archive_sha256` identifies the complete delivered archive. Both are
+  defined by the kit build output.
 - `operation` is one of `verify-manifest`, `verify-delegation`,
   `verify-receipt`, `vectors`, `fixtures`, `conformance-report`.
 - On rejection, `ok` is `false` and `reason_code` is a stable
@@ -269,6 +275,11 @@ Every verification operation emits one JSON object on stdout:
 - Exact equality with reference diagnostic wording is not required; the
   cross-language comparison contract is accept-versus-reject plus a stable
   semantic rejection category.
+
+The implementation report must additionally record
+`kit_build_head_sha` — the repository state the kit was assembled from. The
+verifier may receive that value from its implementation metadata or
+conformance configuration; it is not an FAW protocol field.
 
 ## Bidirectional interoperability
 
@@ -398,9 +409,6 @@ non-normative implementation choice
 Listed separately from resolved questions; none is opened in this slice
 because none is a demonstrated contradiction of two normative statements:
 
-- **Missing `LICENSE` file** — the allowlist reserves `LICENSE`; the
-  repository ships none (MIT declared in packaging metadata). Decision
-  needed: publish a license file, or permanently exclude it from the kit.
 - **Rejection taxonomy normativity** — either promote the semantic
   rejection categories into the spec or state they are implementation-defined
   (item 9).

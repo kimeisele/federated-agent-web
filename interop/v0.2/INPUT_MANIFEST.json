@@ -2,6 +2,13 @@
   "faw_spec_version": "0.2",
   "files": [
     {
+      "classification": "license",
+      "path": "LICENSE",
+      "reason": "License terms governing copying, modification and redistribution of the implementer-kit materials.",
+      "sha256": "0204409f434c2527d50c16c53f867363f1317fac8c0cc5746a8c1f21cba5b7e5",
+      "size_bytes": 1067
+    },
+    {
       "classification": "non-normative-guidance",
       "path": "SECURITY.md",
       "reason": "Disclosure and hygiene policy; non-normative guidance.",
@@ -19,8 +26,8 @@
       "classification": "non-normative-guidance",
       "path": "docs/V0_5_IMPLEMENTER_BRIEF.md",
       "reason": "Implementer scope, verification order, CLI and result-format contract; non-normative guidance.",
-      "sha256": "bf136a8ae3f60dc49514b97166f27a22f2ae1568d46d31d59e06ebfd681d01dc",
-      "size_bytes": 19158
+      "sha256": "1047215332ab5708e4b9f9ee23b97ff4b96e73cb15122018f87f535376854948",
+      "size_bytes": 19542
     },
     {
       "classification": "normative",
@@ -221,6 +228,6 @@
   ],
   "format_version": 1,
   "generated_archive_name": "faw-v0.2-implementer-kit.tar.gz",
-  "source_commit": "bb85221c894473adfd17dceb2c7d3685d9e266ea",
+  "reference_material_commit": "bb85221c894473adfd17dceb2c7d3685d9e266ea",
   "source_repository": "kimeisele/federated-agent-web"
 }

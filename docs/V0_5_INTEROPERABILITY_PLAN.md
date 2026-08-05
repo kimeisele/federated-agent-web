@@ -95,7 +95,8 @@ requirements, never from reference test code.
 
 The `faw-verifier-go conformance-report <kit-directory>` command emits a
 machine-readable report covering all four layers. The implementation report
-records: the kit manifest digest, the kit source commit, the emitter
+records the kit provenance — the frozen reference-material commit, the
+manifest digest, the archive digest, and the kit build HEAD — the emitter
 verification results from the reference, the negative-interoperability
 matrix, and the independence declaration required by ADR 0002.
 
