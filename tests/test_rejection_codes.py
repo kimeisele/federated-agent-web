@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 import pytest
 
 from federated_agent_web import canonical
+from federated_agent_web.crypto import b64url_decode, b64url_encode
 from federated_agent_web.documents import KIND_DELEGATION, KIND_RECEIPT
 from federated_agent_web.pending import PendingDelegationStore
 from federated_agent_web.replay import ReplayStore
@@ -43,6 +44,52 @@ def _verify(doc_bytes, *, kind, local_id=None, chain=None, policy=None, at=None,
 def _assert_code(result, expected_code):
     assert not result.ok
     assert result.reason_code == expected_code, f"expected {expected_code}, got {result.reason_code}"
+
+
+def _corrupt_signature_value(value: str) -> str:
+    """Deterministically corrupt a signature: flip bit 0 of the first decoded byte."""
+    raw = b64url_decode(value)
+    assert raw, "test fixture unexpectedly produced an empty signature"
+
+    corrupted = bytes([raw[0] ^ 0x01]) + raw[1:]
+    encoded = b64url_encode(corrupted)
+
+    assert corrupted != raw
+    assert encoded != value
+    assert len(corrupted) == len(raw)
+
+    return encoded
+
+
+class TestCorruptSignatureHelper:
+    """The corruption helper must deterministically change every signature."""
+
+    @pytest.mark.parametrize(
+        "raw",
+        [
+            b"\x00" * 64,              # base64url value begins with 'A'
+            b"\xff" * 64,
+            bytes(range(64)),
+            bytes(range(63, -1, -1)),
+        ],
+        ids=["zeros-begins-with-A", "all-ff", "ascending", "descending"],
+    )
+    def test_changes_exactly_one_byte(self, raw):
+        value = b64url_encode(raw)
+        encoded = _corrupt_signature_value(value)
+
+        assert encoded != value  # output differs from input
+        decoded = b64url_decode(encoded)
+        assert b64url_encode(decoded) == encoded  # output stays valid base64url
+        assert len(decoded) == len(raw)  # decoded length unchanged
+        assert decoded[0] == raw[0] ^ 0x01  # exactly one decoded byte changed
+        assert decoded[1:] == raw[1:]
+
+    def test_value_beginning_with_A_is_still_changed(self):
+        value = b64url_encode(b"\x00" * 64)
+        assert value.startswith("A")
+        encoded = _corrupt_signature_value(value)
+        assert encoded != value
 
 
 class TestParseCodes:
@@ -164,7 +211,7 @@ class TestSignatureCode:
     def test_signature_invalid(self):
         issuer, executor = make_node_pair()
         delegation = build_delegation(issuer, target_node_id=executor.node_id)
-        delegation["signature"]["value"] = "A" + delegation["signature"]["value"][1:]
+        delegation["signature"]["value"] = _corrupt_signature_value(delegation["signature"]["value"])
         r = _verify(canonical.canonical_bytes(delegation), kind=KIND_DELEGATION,
                      chain=trust_for(issuer), local_id=executor.node_id)
         _assert_code(r, "signature.invalid")
@@ -322,7 +369,7 @@ class TestCodeMutation:
     def test_wrong_code_detected(self):
         issuer, executor = make_node_pair()
         delegation = build_delegation(issuer, target_node_id=executor.node_id)
-        delegation["signature"]["value"] = "A" + delegation["signature"]["value"][1:]
+        delegation["signature"]["value"] = _corrupt_signature_value(delegation["signature"]["value"])
         r = _verify(canonical.canonical_bytes(delegation), kind=KIND_DELEGATION,
                      chain=trust_for(issuer), local_id=executor.node_id)
         # Must be signature.invalid — asserting the wrong code proves the code is specific
