@@ -1,0 +1,226 @@
+{
+  "faw_spec_version": "0.2",
+  "files": [
+    {
+      "classification": "non-normative-guidance",
+      "path": "SECURITY.md",
+      "reason": "Disclosure and hygiene policy; non-normative guidance.",
+      "sha256": "a957989a0ceb844e9bff355ab623c10b39f2ee35956ab5ff4f1e7d1d46e1d17f",
+      "size_bytes": 3959
+    },
+    {
+      "classification": "normative-summary",
+      "path": "SPEC.md",
+      "reason": "Condensed contract summary; conflicts lose to the governing specification.",
+      "sha256": "825b97f4917a0068db297eb4fb9cf09d3c3a8092d282b5f5e010962aaa05a90f",
+      "size_bytes": 9199
+    },
+    {
+      "classification": "non-normative-guidance",
+      "path": "docs/V0_5_IMPLEMENTER_BRIEF.md",
+      "reason": "Implementer scope, verification order, CLI and result-format contract; non-normative guidance.",
+      "sha256": "bf136a8ae3f60dc49514b97166f27a22f2ae1568d46d31d59e06ebfd681d01dc",
+      "size_bytes": 19158
+    },
+    {
+      "classification": "normative",
+      "path": "docs/federated-agent-web-build-spec-v0.2.md",
+      "reason": "Governing build specification; authoritative source of normative MUST requirements.",
+      "sha256": "0421d0d12bc37336f0068558ae0e862ce0db71d1360203ad70df8b729f06dc7c",
+      "size_bytes": 43545
+    },
+    {
+      "classification": "normative",
+      "path": "schemas/delegation.schema.json",
+      "reason": "Normative JSON Schema constraint for a normative document kind.",
+      "sha256": "2c83d4fd716c914425fb019732dd30c35232f5a28d728354ca09d645a785b020",
+      "size_bytes": 6807
+    },
+    {
+      "classification": "normative",
+      "path": "schemas/node-manifest.schema.json",
+      "reason": "Normative JSON Schema constraint for a normative document kind.",
+      "sha256": "1722c0bf987007f41969a88e63871604cd39238dee7c056149aa30fcbb609f48",
+      "size_bytes": 5122
+    },
+    {
+      "classification": "normative",
+      "path": "schemas/receipt.schema.json",
+      "reason": "Normative JSON Schema constraint for a normative document kind.",
+      "sha256": "88cb42072ed0fdeb0239f7d8873b82e36c766bafe8eeec233204cb4da8b75e76",
+      "size_bytes": 4558
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "vectors/README.md",
+      "reason": "Golden-vector reproduction guide and key-hygiene statement.",
+      "sha256": "ff5e92f11cbfeb97b2d429ae5b4fc129edf50d4bbf2cfa61bdf57af4cea97a9e",
+      "size_bytes": 1889
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "vectors/canonicalization/nested.canonical.hex",
+      "reason": "Canonicalization conformance fixture (input + expected canonical bytes).",
+      "sha256": "db3beadbc6a3e0faba74fd31d77c8e70697992ff5953903d0b2f03792e5aadb5",
+      "size_bytes": 63
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "vectors/canonicalization/nested.json",
+      "reason": "Canonicalization conformance fixture (input + expected canonical bytes).",
+      "sha256": "6cd6dbac012537e0684f5adf357a2b3fea3c07abd8cc6fbae6d149859badab64",
+      "size_bytes": 39
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "vectors/canonicalization/numbers.canonical.hex",
+      "reason": "Canonicalization conformance fixture (input + expected canonical bytes).",
+      "sha256": "783a54fbb5fccd62c1263b7164d82da8a609a76d5daca79084847062705e12ec",
+      "size_bytes": 171
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "vectors/canonicalization/numbers.json",
+      "reason": "Canonicalization conformance fixture (input + expected canonical bytes).",
+      "sha256": "8b8c18b1c5caf1e43766ab9e8a56bbae748b360e936cc1959729f525ed4b9e83",
+      "size_bytes": 95
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "vectors/canonicalization/strings.canonical.hex",
+      "reason": "Canonicalization conformance fixture (input + expected canonical bytes).",
+      "sha256": "d5384c254e94c4d8131b7b921d5c06f379eec8fe0c18ce1db834231abe1b8df9",
+      "size_bytes": 111
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "vectors/canonicalization/strings.json",
+      "reason": "Canonicalization conformance fixture (input + expected canonical bytes).",
+      "sha256": "88f77b69874ca1502f22f9b7c9bb8c88b31e2c3f83fa6fa019beff50afc41547",
+      "size_bytes": 58
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "vectors/canonicalization/unicode.canonical.hex",
+      "reason": "Canonicalization conformance fixture (input + expected canonical bytes).",
+      "sha256": "ac2e52029051a01c9f6b37e4ae687ab8b43791eaca9d7e334b28cc867fcd2ef3",
+      "size_bytes": 81
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "vectors/canonicalization/unicode.json",
+      "reason": "Canonicalization conformance fixture (input + expected canonical bytes).",
+      "sha256": "0b132f96c216c0f375a58026a82e00d055cd13f6bc863b59715a74cb511006d9",
+      "size_bytes": 43
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "vectors/delegations/delegation-digest",
+      "reason": "Signed-delegation conformance fixture with issuer manifest and digest.",
+      "sha256": "289bf7bfe9b4c040185ae7c067550490d3196e37df3518183e645e9b4cd1d540",
+      "size_bytes": 72
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "vectors/delegations/delegation.json",
+      "reason": "Signed-delegation conformance fixture with issuer manifest and digest.",
+      "sha256": "f2b78d45d41c73aa170d9e7657cd2be814a9b84584058561106542c9a11a179f",
+      "size_bytes": 1713
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "vectors/delegations/issuer-manifest.json",
+      "reason": "Signed-delegation conformance fixture with issuer manifest and digest.",
+      "sha256": "aff51e1706b9576a47de6174c30018059b6f7576975ae8b0ed2fd14b6bdd6e53",
+      "size_bytes": 1212
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "vectors/receipts/artifact-digest",
+      "reason": "Signed-receipt conformance fixture with executor manifest, artifacts and digest.",
+      "sha256": "1b63e4f5028752f29de95e266dafae31138e27464d33131a6d9347671b76221b",
+      "size_bytes": 72
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "vectors/receipts/artifact-input.bin",
+      "reason": "Signed-receipt conformance fixture with executor manifest, artifacts and digest.",
+      "sha256": "076a8d0bf2110e07365c3704a366f7a17779195653f9cc6650bafdeca02cfa66",
+      "size_bytes": 45
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "vectors/receipts/artifact.bin",
+      "reason": "Signed-receipt conformance fixture with executor manifest, artifacts and digest.",
+      "sha256": "fffe826ae59aa85d617728d6858cce82f8bce7343b7d63fe0352f8bcc4faef02",
+      "size_bytes": 379
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "vectors/receipts/executor-manifest.json",
+      "reason": "Signed-receipt conformance fixture with executor manifest, artifacts and digest.",
+      "sha256": "895bb4f6bd26c0b702f8ff0ffb24ec9cb19dab21782da07774c3ac750ec01623",
+      "size_bytes": 1214
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "vectors/receipts/receipt-digest",
+      "reason": "Signed-receipt conformance fixture with executor manifest, artifacts and digest.",
+      "sha256": "dbfffb26083104043e08bc6f4c9644b7ab51ae1b528201b93d04ddde466b1510",
+      "size_bytes": 72
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "vectors/receipts/receipt.json",
+      "reason": "Signed-receipt conformance fixture with executor manifest, artifacts and digest.",
+      "sha256": "c43cf22ea1864c82ae97366480df365ee4ac2bd7d460d07ae09ca206c99a1402",
+      "size_bytes": 1282
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "vectors/signatures/content-digest",
+      "reason": "Signature conformance fixture (message, canonical bytes, digest, TEST-ONLY keypair).",
+      "sha256": "e36c35888e1263a824103ae4765bafb107867b92717526a5cfaf07d1afde07af",
+      "size_bytes": 72
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "vectors/signatures/keypair.json",
+      "reason": "Signature conformance fixture (message, canonical bytes, digest, TEST-ONLY keypair).",
+      "sha256": "91fcf132a22ef94c3dbd70b98481e54d10cd0deb13eb69bfb9f96e13993725ae",
+      "size_bytes": 463
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "vectors/signatures/message-canonical.hex",
+      "reason": "Signature conformance fixture (message, canonical bytes, digest, TEST-ONLY keypair).",
+      "sha256": "6c2c5b004e30ef8d9160853584c0fdcd2c1fbd02403e82ce9962cc5e3a5278aa",
+      "size_bytes": 371
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "vectors/signatures/message.json",
+      "reason": "Signature conformance fixture (message, canonical bytes, digest, TEST-ONLY keypair).",
+      "sha256": "81d2a8ae119dba25f3d7429e3220e4b72c72c1296d0465c37a6b7ad56c219702",
+      "size_bytes": 221
+    }
+  ],
+  "forbidden_prefixes": [
+    "src/",
+    "tests/",
+    "examples/",
+    ".github/",
+    "scripts/",
+    "pyproject.toml",
+    "docs/IMPLEMENTATION_REPORT.md",
+    "docs/REUSE_REPORT.md",
+    "docs/TRACEABILITY_V0_2.json",
+    "docs/TRANSPORT_CONFORMANCE.md",
+    "docs/NADI_LIVE_REHEARSAL.md",
+    "docs/ADAPTER_NADI.md"
+  ],
+  "format_version": 1,
+  "generated_archive_name": "faw-v0.2-implementer-kit.tar.gz",
+  "source_commit": "bb85221c894473adfd17dceb2c7d3685d9e266ea",
+  "source_repository": "kimeisele/federated-agent-web"
+}
