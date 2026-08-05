@@ -3,11 +3,13 @@
 **What 1.0 means here:** the wire format is frozen and we promise not to break implementations built against it. That promise is only credible once someone other than us has implemented it. So this roadmap is organized around *external evidence*, not feature count.
 
 **Current state:** spec v0.2 frozen, reference core on `main`, CI green;
-v0.3 hardening complete. The v0.4 transport-independence gate is complete:
-adapter source commit `9bea391` passes the unchanged shared conformance suite
-against the stub relay and passed a controlled cross-account live GitHub
-rehearsal. Evidence is recorded in `docs/NADI_LIVE_REHEARSAL.md`.
-The next milestone is v0.5: an independent second implementation.
+v0.3 hardening complete; the v0.4 transport-independence gate is complete
+(evidence in `docs/NADI_LIVE_REHEARSAL.md`). v0.5 clean-room preparation
+has begun: ADR 0002, the clean-room protocol
+(`docs/V0_5_CLEAN_ROOM_PROTOCOL.md`), the implementer brief, and the hashed
+implementer kit (`interop/v0.2/INPUT_MANIFEST.json`) define the boundary
+for a second implementation. No second implementation exists yet, and the
+v0.5 gate is not complete.
 
 ## Decisions already taken
 
