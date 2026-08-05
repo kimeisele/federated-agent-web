@@ -94,50 +94,84 @@ class KitBuildError(Exception):
 # Provenance: HEAD resolution (no subprocess)
 # ---------------------------------------------------------------------------
 
-def read_head_sha(root: Path) -> str:
-    """Return the current Git HEAD SHA, resolving .git indirection.
+def _resolve_git_dirs(root: Path) -> tuple[Path, Path]:
+    """Return (git_dir, common_dir) for the repository at root.
 
-    Supports ordinary clones (`.git/` directory), detached HEAD, loose refs,
-    and packed refs. Raises KitBuildError when HEAD cannot be determined so
-    the build never emits incomplete provenance. The Git index is not
-    parsed.
+    git_dir is the worktree administration directory: `.git/` for ordinary
+    clones, or the target of a `.git` indirection file for linked
+    worktrees. common_dir is where shared refs live: it equals git_dir for
+    ordinary clones and is read from the `commondir` file for linked
+    worktrees. Relative paths are resolved against their containing
+    directory.
     """
     git_dir = root / ".git"
     if git_dir.is_file():
-        try:
-            target = git_dir.read_text().strip()
-            if target.startswith("gitdir:"):
-                git_dir = Path(target.split(":", 1)[1].strip())
-                if not git_dir.is_absolute():
-                    git_dir = root / git_dir
-        except OSError as exc:
-            raise KitBuildError(f"cannot read .git indirection: {exc}") from exc
-    head_file = git_dir / "HEAD"
+        value = git_dir.read_text().strip()
+        if not value.startswith("gitdir:"):
+            raise KitBuildError("invalid .git indirection")
+        git_dir = Path(value.split(":", 1)[1].strip())
+        if not git_dir.is_absolute():
+            git_dir = (root / git_dir).resolve()
+
+    common_dir = git_dir
+    commondir_file = git_dir / "commondir"
+    if commondir_file.is_file():
+        value = commondir_file.read_text().strip()
+        if not value:
+            raise KitBuildError("empty Git commondir")
+        common_dir = Path(value)
+        if not common_dir.is_absolute():
+            common_dir = (git_dir / common_dir).resolve()
+    return git_dir, common_dir
+
+
+def _validated_sha(text: str, what: str) -> str:
+    """Strip and validate a candidate SHA; reject anything that is not
+    exactly 40 lowercase hexadecimal characters."""
+    sha = text.strip()
+    if not _COMMIT_RE.fullmatch(sha):
+        raise KitBuildError(f"malformed {what}: {sha!r}")
+    return sha
+
+
+def read_head_sha(root: Path) -> str:
+    """Return the current Git HEAD SHA.
+
+    Resolves `.git` indirection (linked worktrees), the worktree-specific
+    HEAD, loose shared refs (git_dir then common_dir), and packed shared
+    refs from the common directory. Every resolved SHA is validated as 40
+    lowercase hex characters; malformed provenance fails with
+    KitBuildError. No subprocess, network, or Git-index parsing is used.
+    """
+    git_dir, common_dir = _resolve_git_dirs(root)
     try:
-        head = head_file.read_text().strip()
+        head = (git_dir / "HEAD").read_text().strip()
     except OSError as exc:
         raise KitBuildError(f"cannot determine repository HEAD: {exc}") from exc
+
     if head.startswith("ref:"):
         ref = head.split(":", 1)[1].strip()
-        loose = git_dir / ref
-        try:
-            return loose.read_text().strip()
-        except OSError:
-            pass
-        packed = git_dir / "packed-refs"
+        for base in (git_dir, common_dir):
+            try:
+                return _validated_sha((base / ref).read_text(), f"loose ref {ref}")
+            except OSError:
+                continue
+        packed = common_dir / "packed-refs"
         try:
             for line in packed.read_text().splitlines():
-                if line.startswith("#") or line.startswith("^"):
+                line = line.strip()
+                if not line or line.startswith("#") or line.startswith("^"):
                     continue
+                if " " not in line:
+                    raise KitBuildError(f"malformed packed-ref row: {line!r}")
                 sha, name = line.split(" ", 1)
                 if name.strip() == ref:
-                    return sha
+                    return _validated_sha(sha, f"packed ref {ref}")
         except OSError:
             pass
         raise KitBuildError(f"cannot resolve repository HEAD ref: {ref}")
-    if _COMMIT_RE.fullmatch(head):
-        return head
-    raise KitBuildError("repository HEAD is neither a ref nor a commit SHA")
+
+    return _validated_sha(head, "detached HEAD")
 
 
 # ---------------------------------------------------------------------------

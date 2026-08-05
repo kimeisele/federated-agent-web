@@ -315,6 +315,70 @@ def test_manifest_does_not_list_itself(tmp_path):
     )
 
 
+# ---------------------------------------------------------------------------
+# Linked-worktree HEAD resolution
+# ---------------------------------------------------------------------------
+
+FEATURE_SHA = "0123456789abcdef0123456789abcdef01234567"
+
+
+def _linked_worktree(tmp_path: Path, *, packed: bool) -> Path:
+    common = tmp_path / "common.git"
+    admin = common / "worktrees" / "example"
+    root = tmp_path / "root"
+    (common / "refs" / "heads").mkdir(parents=True)
+    if packed:
+        (common / "packed-refs").write_text(
+            "# pack-refs with: peeled fully-peeled sorted \n"
+            "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa refs/tags/v1\n"
+            "^bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb\n"
+            f"{FEATURE_SHA} refs/heads/feature\n"
+        )
+    else:
+        (common / "refs" / "heads" / "feature").write_text(FEATURE_SHA + "\n")
+    admin.mkdir(parents=True)
+    (admin / "HEAD").write_text("ref: refs/heads/feature\n")
+    (admin / "commondir").write_text("../..\n")
+    root.mkdir()
+    (root / ".git").write_text(f"gitdir: {admin}\n")
+    return root
+
+
+def test_linked_worktree_loose_ref_resolution(tmp_path):
+    root = _linked_worktree(tmp_path, packed=False)
+    assert BUILDER.read_head_sha(root) == FEATURE_SHA
+
+
+def test_linked_worktree_packed_ref_resolution(tmp_path):
+    root = _linked_worktree(tmp_path, packed=True)
+    assert BUILDER.read_head_sha(root) == FEATURE_SHA
+
+
+@pytest.mark.parametrize("value", ["abc123", "A" * 40, "not-a-sha"])
+def test_malformed_detached_head_rejected(tmp_path, value):
+    root = _synthetic_root(tmp_path / f"bad-{len(value)}")
+    (root / ".git" / "HEAD").write_text(value + "\n")
+    with pytest.raises(BUILDER.KitBuildError):
+        BUILDER.read_head_sha(root)
+
+
+def test_empty_loose_ref_rejected(tmp_path):
+    root = _synthetic_root(tmp_path / "empty-ref")
+    (root / ".git" / "refs" / "heads" / "test").write_text("")
+    with pytest.raises(BUILDER.KitBuildError):
+        BUILDER.read_head_sha(root)
+
+
+def test_malformed_packed_ref_row_rejected(tmp_path):
+    root = _linked_worktree(tmp_path, packed=True)
+    (root.parent / "common.git" / "packed-refs").write_text(
+        "malformed-row-without-space\n"
+        f"{FEATURE_SHA} refs/heads/feature\n"
+    )
+    with pytest.raises(BUILDER.KitBuildError):
+        BUILDER.read_head_sha(root)
+
+
 def test_no_network_or_subprocess_is_required(tmp_path):
     source = BUILDER_PATH.read_text()
     for forbidden in ("import subprocess", "from subprocess", "import socket",
