@@ -153,11 +153,11 @@ def test_exact_source_commit_is_recorded(manifest):
     assert manifest["generated_archive_name"] == "faw-v0.2-implementer-kit.tar.gz"
 
 
-def test_manifest_does_not_list_itself(manifest):
+def test_manifest_does_not_list_itself(manifest, tmp_path):
     listed = {e["path"] for e in manifest["files"]}
     assert "interop/v0.2/INPUT_MANIFEST.json" not in listed
     # but the archive still carries the manifest as a self-describing member
-    archive = BUILDER.build(__import__("tempfile").mkdtemp())
+    archive = BUILDER.build(tmp_path / "self")
     assert "interop/v0.2/INPUT_MANIFEST.json" in _member_names(
         Path(archive["archive_path"]).read_bytes()
     )
