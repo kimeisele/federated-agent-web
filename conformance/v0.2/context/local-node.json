@@ -1,0 +1,7 @@
+{
+  "local_node_id": "urn:faw:conformance-executor-0001",
+  "local_policy": {
+    "clock_skew_seconds": 60,
+    "reject_stale": false
+  }
+}

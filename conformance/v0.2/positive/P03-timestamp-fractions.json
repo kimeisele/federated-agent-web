@@ -1,0 +1,37 @@
+{
+  "kind": "faw-receipt",
+  "spec_version": "0.2",
+  "id": "30000000-0000-4000-8000-000000000001",
+  "issued_at": "2026-01-01T00:00:30Z",
+  "issuer": {
+    "node_id": "urn:faw:conformance-executor-0001",
+    "kid": "sha256:9172b2c0d89a205dbc277942caa37df980f5d346fadb80024b4c9bbe4af3a364"
+  },
+  "body": {
+    "receipt_id": "30000000-0000-4000-8000-000000000001",
+    "task_id": "40000000-0000-4000-8000-000000000001",
+    "attempt_id": "40000000-0000-4000-8000-000000000002",
+    "delegation_digest": "sha256:2c8e8571ce4617289af57302fe0dba514a8f0a73820ecb41f7dddedb4c18ec3d",
+    "executor_node_id": "urn:faw:conformance-executor-0001",
+    "status": "succeeded",
+    "started_at": "2026-01-01T00:00:00.5Z",
+    "finished_at": "2026-01-01T00:00:00.500000000Z",
+    "artifacts": [
+      {
+        "name": "result.json",
+        "media_type": "application/json",
+        "digest": "sha256:cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+        "size": 18,
+        "location": "mem://result.json"
+      }
+    ],
+    "usage": {
+      "wall_seconds": 1,
+      "output_bytes": 18
+    }
+  },
+  "signature": {
+    "alg": "Ed25519",
+    "value": "4NOo_HHxYB-uGr0RGMMyMdsDRsho86h_Q-wcJ01qtWpmPFUsGIJ0e2tsLMOFwRejgbPBfoRIviNNSbMwwRwVCw"
+  }
+}

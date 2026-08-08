@@ -1,0 +1,52 @@
+{
+  "kind": "faw-delegation",
+  "spec_version": "0.2",
+  "id": "20000000-0000-4000-8000-000000000001",
+  "issued_at": "2026-01-01T00:00:00Z",
+  "issuer": {
+    "node_id": "urn:faw:conformance-issuer-0001",
+    "kid": "sha256:3b4fbe09abcfa06a0a34d3a8be399c375afb94a79bd34d8a05783eab336e2d71"
+  },
+  "body": {
+    "task_id": "40000000-0000-4000-8000-000000000001",
+    "attempt_id": "40000000-0000-4000-8000-000000000002",
+    "issuer_node_id": "urn:faw:conformance-issuer-0001",
+    "target_node_id": "urn:faw:conformance-executor-0001",
+    "capability": "hash_file",
+    "input": {
+      "kind": "inline",
+      "data": {
+        "seed": "conformance"
+      }
+    },
+    "authority": {
+      "actions": [
+        "hash_file"
+      ],
+      "external_effect_scope": {
+        "allowed_effects": [
+          "none"
+        ]
+      },
+      "expiry": "2027-01-01T00:00:00Z"
+    },
+    "budget": {
+      "max_wall_seconds": 60,
+      "max_output_bytes": 8192
+    },
+    "deadline": "2026-01-01T00:20:00Z",
+    "expected_output": {
+      "kind": "artifact",
+      "media_type": "application/json",
+      "required_artifacts": [
+        "result.json"
+      ],
+      "expects_repository_mutation": false
+    },
+    "expires_at": "2026-01-01T00:10:00Z"
+  },
+  "signature": {
+    "alg": "Ed25519",
+    "value": "O7kZsHuyojCgnjrevpuwcFuTj9JSVGtD--__IHvhUy4nNy272HfcDNrhxWHkdUPXsxFJ7EPHhS3uGGuBwkLhCQ"
+  }
+}
