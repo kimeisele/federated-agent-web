@@ -8,13 +8,15 @@ v0.3 hardening complete; the v0.4 transport-independence gate is complete
 is complete: ADR 0002, the clean-room protocol
 (`docs/V0_5_CLEAN_ROOM_PROTOCOL.md`), the implementer brief, and the hashed
 implementer kit (`interop/v0.2/INPUT_MANIFEST.json`) define the boundary
-for a second implementation. Cross-language semantic clarification is in
-progress: ADR 0003 and the interoperability profile
-(`docs/FAW_V0_2_INTEROPERABILITY_PROFILE.md`) pin the verification
-semantics required before negative-vector generation or a second-language
-implementation. The current implementer kit remains pinned to the previous
-reference material and has not been refreshed. No second implementation
-exists yet, and the v0.5 gate is not complete.
+for a second implementation. Cross-language semantics are pinned: ADR 0003
+and the interoperability profile
+(`docs/FAW_V0_2_INTEROPERABILITY_PROFILE.md`) define the verification
+semantics for negative-vector generation and a second-language
+implementation. Reference semantic alignment is in progress, aligning the
+Python reference verifier with the pinned profile. Negative vectors have
+not yet been created. The existing implementer kit remains unchanged and
+pinned to the previous reference material. No second implementation exists
+yet, and the v0.5 gate is not complete.
 
 ## Decisions already taken
 

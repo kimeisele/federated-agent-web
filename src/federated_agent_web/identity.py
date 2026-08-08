@@ -26,8 +26,9 @@ from .documents import (
     KIND_MANIFEST,
     build_document,
     content_digest_of,
+    datetime_to_ns,
     now_utc_z,
-    parse_timestamp,
+    parse_timestamp_ns,
     validate_document,
 )
 
@@ -37,6 +38,9 @@ __all__ = [
     "generate_node_id",
     "validate_manifest_chain",
     "resolve_key_for",
+    "resolve_key_in_manifest",
+    "resolve_key_detailed",
+    "KeyResolution",
     "ChainValidation",
 ]
 
@@ -431,33 +435,91 @@ def validate_manifest_chain(
 def _signature_valid_in_context(manifest: dict[str, Any], prior: list[dict[str, Any]]) -> bool:
     """Verify ``manifest``'s signature with a key active in the prior context."""
     issuer = manifest["issuer"]
-    at = parse_timestamp(manifest["issued_at"])
+    at_ns = parse_timestamp_ns(manifest["issued_at"])
     context = prior[-1] if prior else manifest
-    public_raw = _find_active_key(context, issuer["kid"], at)
-    if public_raw is None:
+    resolution = _resolve_key_in_manifest_detailed(context, issuer["kid"], at_ns)
+    if not resolution.ok:
         return False
     data = canonical.canonical_bytes(canonical.strip_signature(manifest))
-    return crypto.verify_canonical(data, manifest["signature"]["value"], public_raw)
+    return crypto.verify_canonical(data, manifest["signature"]["value"], resolution.public_raw)
 
 
 def _find_active_key(manifest: dict[str, Any], kid: str, at: datetime) -> bytes | None:
-    """Return the raw public key for ``kid`` if it is active in ``manifest`` at ``at``."""
+    """Return the raw public key for ``kid`` if it is active in ``manifest`` at ``at``.
+
+    Compatibility wrapper over the detailed resolver.
+    """
+    resolution = _resolve_key_in_manifest_detailed(manifest, kid, datetime_to_ns(at))
+    return resolution.public_raw if resolution.ok else None
+
+
+@dataclass(frozen=True)
+class KeyResolution:
+    """Bounded detailed result of resolving ``kid`` in applicable manifest state.
+
+    ``ok`` is True only when the key is present, eligible, and decoded to raw
+    public bytes. On failure ``code`` carries the stable profile category
+    (v0.5 profile §6): ``trust.unknown_key`` when the kid is absent from the
+    applicable manifest state, or ``trust.key_not_valid`` when the kid exists
+    but is not valid/eligible at the document's issuance instant (status,
+    validity interval, or revocation under the existing v0.2 rules).
+    """
+
+    ok: bool
+    public_raw: bytes | None = None
+    code: str | None = None
+    reason: str = ""
+
+
+def _resolve_key_in_manifest_detailed(
+    manifest: dict[str, Any], kid: str, at_ns: int
+) -> KeyResolution:
+    """Resolve ``kid`` in one manifest's key table at instant ``at_ns``.
+
+    Eligibility follows the existing v0.2 rules with the half-open validity
+    interval pinned by the profile (§4): ``valid_from <= at_ns < valid_until``.
+    """
     for entry in manifest["body"]["keys"]:
         if entry["kid"] != kid:
             continue
         if entry["status"] != "active":
-            return None
-        if parse_timestamp(entry["valid_from"]) > at:
-            return None
-        if entry.get("valid_until") is not None and parse_timestamp(entry["valid_until"]) <= at:
-            return None
+            return KeyResolution(
+                False, code="trust.key_not_valid",
+                reason=f"key {kid} status is {entry['status']!r}, not 'active'",
+            )
+        if parse_timestamp_ns(entry["valid_from"]) > at_ns:
+            return KeyResolution(
+                False, code="trust.key_not_valid",
+                reason=f"key {kid} not valid until {entry['valid_from']}",
+            )
+        if entry.get("valid_until") is not None and parse_timestamp_ns(entry["valid_until"]) <= at_ns:
+            return KeyResolution(
+                False, code="trust.key_not_valid",
+                reason=f"key {kid} valid only until {entry['valid_until']} (exclusive)",
+            )
         if entry.get("revoked_at") is not None:
-            return None
+            return KeyResolution(
+                False, code="trust.key_not_valid",
+                reason=f"key {kid} is revoked",
+            )
         try:
-            return crypto.b64url_decode(entry["public_key"])
+            return KeyResolution(True, public_raw=crypto.b64url_decode(entry["public_key"]))
         except ValueError:
-            return None
-    return None
+            return KeyResolution(
+                False, code="trust.key_not_valid",
+                reason=f"key {kid} public key encoding is invalid",
+            )
+    return KeyResolution(
+        False, code="trust.unknown_key",
+        reason=f"kid {kid} absent from applicable manifest state",
+    )
+
+
+def resolve_key_in_manifest_detailed(
+    manifest: dict[str, Any], kid: str, at_ns: int
+) -> KeyResolution:
+    """Detailed variant of ``resolve_key_in_manifest`` taking nanoseconds."""
+    return _resolve_key_in_manifest_detailed(manifest, kid, at_ns)
 
 
 def resolve_key_for(
@@ -470,14 +532,39 @@ def resolve_key_for(
 
     Only the newest manifest with ``issued_at <= at`` is consulted; the key
     must be active at ``at``. Returns ``None`` when unresolved or inactive.
+    The detailed classification is available via ``resolve_key_detailed``.
     """
-    relevant: list[dict[str, Any]] = [m for m in chain if parse_timestamp(m["issued_at"]) <= at]
+    return resolve_key_detailed(chain, node_id, kid, datetime_to_ns(at)).public_raw
+
+
+def resolve_key_detailed(
+    chain: list[dict[str, Any]],
+    node_id: str,
+    kid: str,
+    at_ns: int,
+) -> KeyResolution:
+    """Resolve ``kid`` within a validated chain with a bounded detailed outcome.
+
+    Distinguishes ``trust.unknown_key`` (kid absent from the applicable
+    manifest state, no applicable manifest at the instant, or applicable
+    manifest belonging to a different ``node_id``) from
+    ``trust.key_not_valid`` (kid present but not valid/eligible at
+    ``at_ns``). The exact instant is used; fractional digits 7–9 are not
+    truncated.
+    """
+    relevant = [m for m in chain if parse_timestamp_ns(m["issued_at"]) <= at_ns]
     if not relevant:
-        return None
+        return KeyResolution(
+            False, code="trust.unknown_key",
+            reason="no manifest applicable at the document's issuance instant",
+        )
     head = relevant[-1]
     if head["body"]["node_id"] != node_id:
-        return None
-    return _find_active_key(head, kid, at)
+        return KeyResolution(
+            False, code="trust.unknown_key",
+            reason="applicable manifest belongs to a different node_id",
+        )
+    return _resolve_key_in_manifest_detailed(head, kid, at_ns)
 
 
 def resolve_key_in_manifest(manifest: dict[str, Any], kid: str, at: datetime) -> bytes | None:
@@ -487,7 +574,7 @@ def resolve_key_in_manifest(manifest: dict[str, Any], kid: str, at: datetime) ->
     against the manifest state that precedes it (the previous manifest, or the
     genesis manifest itself for a self-signed anchor).
     """
-    return _find_active_key(manifest, kid, at)
+    return _resolve_key_in_manifest_detailed(manifest, kid, datetime_to_ns(at)).public_raw
 
 
 def chain_manifest_freshness(chain: list[dict[str, Any]]) -> int:

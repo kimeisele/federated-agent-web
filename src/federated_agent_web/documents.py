@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import re
 import uuid
 from datetime import datetime, timezone
 from pathlib import Path
@@ -21,6 +22,8 @@ __all__ = [
     "DocumentError",
     "now_utc_z",
     "parse_timestamp",
+    "parse_timestamp_ns",
+    "datetime_to_ns",
     "validate_document",
     "build_document",
     "content_digest_of",
@@ -53,8 +56,19 @@ def now_utc_z() -> str:
     return datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
 
+# FAW timestamp grammar: UTC, ``Z`` suffix, zero or 1–9 fractional digits.
+_TIMESTAMP_RE = re.compile(r"^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(?:\.(\d{1,9}))?Z$")
+_EPOCH = datetime(1970, 1, 1, tzinfo=timezone.utc)
+
+
 def parse_timestamp(value: str) -> datetime:
-    """Parse a UTC RFC 3339 ``Z`` timestamp; raise ValueError otherwise."""
+    """Parse a UTC RFC 3339 ``Z`` timestamp; raise ValueError otherwise.
+
+    Compatibility API: returns a ``datetime`` at microsecond precision. The
+    exact nanosecond representation used by protocol comparisons is
+    ``parse_timestamp_ns``; semantic comparisons must not go through this
+    function's six-digit truncation.
+    """
     if not value.endswith("Z"):
         raise ValueError(f"timestamp must end with 'Z': {value!r}")
     body = value[:-1]
@@ -66,6 +80,48 @@ def parse_timestamp(value: str) -> datetime:
         return datetime.strptime(body, "%Y-%m-%dT%H:%M:%S").replace(tzinfo=timezone.utc)
     except ValueError as exc:
         raise ValueError(f"invalid RFC 3339 timestamp {value!r}") from exc
+
+
+def parse_timestamp_ns(value: str) -> int:
+    """Return the exact UTC instant of a FAW timestamp as integer nanoseconds.
+
+    Accepts only the FAW timestamp grammar (UTC, ``Z``, zero or 1–9 fractional
+    digits) and requires the value to denote a real calendar instant — pattern
+    matching alone is not sufficient (v0.5 profile §2). All nine fractional
+    digits are preserved exactly using integer arithmetic; no floating-point
+    epoch conversion is performed. ``.5Z``, ``.50Z`` and ``.500000000Z`` map to
+    the same instant; ``.500000000Z`` and ``.500000001Z`` differ.
+    """
+    match = _TIMESTAMP_RE.match(value)
+    if match is None:
+        raise ValueError(f"invalid RFC 3339 timestamp {value!r}")
+    year, month, day, hour, minute, second, fraction = match.groups()
+    try:
+        instant = datetime(
+            int(year), int(month), int(day), int(hour), int(minute), int(second),
+            tzinfo=timezone.utc,
+        )
+    except ValueError as exc:
+        raise ValueError(f"invalid RFC 3339 timestamp {value!r}") from exc
+    delta = instant - _EPOCH
+    seconds = delta.days * 86400 + delta.seconds
+    fraction_ns = int((fraction or "").ljust(9, "0") or "0")
+    return seconds * 1_000_000_000 + fraction_ns
+
+
+def datetime_to_ns(value: datetime) -> int:
+    """Convert a UTC-aware ``datetime`` to integer nanoseconds, losslessly.
+
+    Python ``datetime`` carries at most microsecond precision, so the
+    conversion is exact. Naive datetimes are treated as UTC.
+    """
+    if value.tzinfo is None:
+        value = value.replace(tzinfo=timezone.utc)
+    else:
+        value = value.astimezone(timezone.utc)
+    delta = value - _EPOCH
+    seconds = delta.days * 86400 + delta.seconds
+    return seconds * 1_000_000_000 + delta.microseconds * 1000
 
 
 # ---------------------------------------------------------------------------

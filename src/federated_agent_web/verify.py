@@ -19,14 +19,16 @@ from .documents import (
     KIND_MANIFEST,
     KIND_RECEIPT,
     content_digest_of,
-    parse_timestamp,
+    datetime_to_ns,
+    parse_timestamp_ns,
     validate_document,
 )
 from .identity import (
     ChainValidation,
+    KeyResolution,
     chain_manifest_freshness,
-    resolve_key_for,
-    resolve_key_in_manifest,
+    resolve_key_detailed,
+    resolve_key_in_manifest_detailed,
     validate_manifest_chain,
 )
 from .pending import PendingDelegationStore, PendingStoreError
@@ -141,7 +143,14 @@ def verify(
     try:
         doc = canonical.parse_strict(document_bytes)
     except canonical.CanonicalizationError as exc:
-        code = "parse.duplicate_key" if isinstance(exc, canonical.DuplicateMemberError) else "parse.invalid"
+        if isinstance(exc, canonical.DuplicateMemberError):
+            code = "parse.duplicate_member"
+        elif isinstance(exc, canonical.InvalidUnicodeError):
+            code = "parse.invalid_unicode"
+        elif isinstance(exc, canonical.UnsupportedNumberError):
+            code = "canonicalization.number_out_of_domain"
+        else:
+            code = "parse.invalid_json"
         return _fail(1, f"strict parse failed: {exc}", result, code=code)
 
     # -- Step 2: expected-kind schema validation ------------------------------
@@ -151,7 +160,7 @@ def verify(
                 2,
                 f"document kind {doc['kind']!r} does not match expected {expected_kind!r}",
                 result,
-                code="document.wrong_kind",
+                code="document.kind_mismatch",
             )
     try:
         validate_document(doc, expected_kind)
@@ -159,13 +168,13 @@ def verify(
         return _fail(2, f"schema validation failed: {exc}", result, code="schema.invalid")
 
     body = doc["body"]
-    issued_at = parse_timestamp(doc["issued_at"])
+    issued_at = parse_timestamp_ns(doc["issued_at"])
 
     # -- Step 3: audience binding (delegations only) ---------------------------
     if expected_kind == KIND_DELEGATION:
         if "target_node_id" in body:
             if local_node_id is None or body["target_node_id"] != local_node_id:
-                return _fail(3, "delegation is not addressed to this node", result, code="delegation.wrong_audience")
+                return _fail(3, "delegation is not addressed to this node", result, code="audience.mismatch")
         elif "capability_target" in body:
             capability = body["capability_target"]["capability"]
             if local_policy.capability_targets.get(capability) != local_node_id:
@@ -173,28 +182,29 @@ def verify(
                     3,
                     f"capability-addressed target {capability!r} not matched by local policy",
                     result,
-                    code="delegation.wrong_audience",
+                    code="audience.mismatch",
                 )
         else:  # schema oneOf guarantees one branch; defensive
-            return _fail(3, "delegation has no resolvable target", result, code="delegation.wrong_audience")
+            return _fail(3, "delegation has no resolvable target", result, code="audience.mismatch")
 
     # -- Step 4: temporal and structural admission -----------------------------
     if expected_kind == KIND_DELEGATION:
-        expires_at = parse_timestamp(body["expires_at"])
-        deadline = parse_timestamp(body["deadline"])
-        authority_expiry = parse_timestamp(body["authority"]["expiry"])
+        expires_at = parse_timestamp_ns(body["expires_at"])
+        deadline = parse_timestamp_ns(body["deadline"])
+        authority_expiry = parse_timestamp_ns(body["authority"]["expiry"])
         if not (issued_at < expires_at):
-            return _fail(4, "issued_at >= expires_at is rejected", result, code="time.ordering")
+            return _fail(4, "issued_at >= expires_at is rejected", result, code="temporal.invalid")
         if expires_at > deadline:
-            return _fail(4, "expires_at > deadline is rejected", result, code="time.ordering")
+            return _fail(4, "expires_at > deadline is rejected", result, code="temporal.invalid")
         if authority_expiry < deadline:
-            return _fail(4, "authority.expiry precedes deadline", result, code="time.ordering")
-        if now > expires_at + _timedelta_seconds(local_policy.clock_skew_seconds):
-            return _fail(4, "delegation expired before admission", result, code="time.expired")
+            return _fail(4, "authority.expiry precedes deadline", result, code="temporal.invalid")
+        skew_ns = local_policy.clock_skew_seconds * 1_000_000_000
+        if datetime_to_ns(now) > expires_at + skew_ns:
+            return _fail(4, "delegation expired before admission", result, code="temporal.invalid")
     elif expected_kind == KIND_RECEIPT:
         if body.get("started_at") is not None:
-            if parse_timestamp(body["finished_at"]) < parse_timestamp(body["started_at"]):
-                return _fail(4, "finished_at precedes started_at", result, code="time.ordering")
+            if parse_timestamp_ns(body["finished_at"]) < parse_timestamp_ns(body["started_at"]):
+                return _fail(4, "finished_at precedes started_at", result, code="temporal.invalid")
         if body["executor_node_id"] != doc["issuer"]["node_id"]:
             return _fail(4, "receipt issuer must be the executor", result, code="receipt.wrong_issuer")
 
@@ -205,23 +215,24 @@ def verify(
         head_digest=trust_context.head_digest,
     )
     if not chain_check.ok:
-        return _fail(5, f"pinned manifest chain invalid: {chain_check.reason}", result, code="trust.chain_invalid")
-    public_raw = _resolve_document_key(
+        return _fail(5, f"pinned manifest chain invalid: {chain_check.reason}", result, code="trust.invalid_chain")
+    resolution: KeyResolution = _resolve_document_key(
         doc, expected_kind, trust_context.chain, issued_at
     )
-    if public_raw is None:
+    if not resolution.ok:
         return _fail(
             5,
-            f"issuer.kid {doc['issuer']['kid']} not active in pinned chain for "
-            f"{doc['issuer']['node_id']} at {doc['issued_at']}",
+            f"issuer.kid {doc['issuer']['kid']} for {doc['issuer']['node_id']} at "
+            f"{doc['issued_at']}: {resolution.reason}",
             result,
-            code="trust.key_unresolved",
+            code=resolution.code or "trust.unknown_key",
         )
+    public_raw = resolution.public_raw
     result.resolved_kid = doc["issuer"]["kid"]
 
     # -- Step 6: revocation and trust-context freshness -------------------------
     window = chain_manifest_freshness(trust_context.chain)
-    is_stale = trust_context.pinned_at + _timedelta_seconds(window) < now
+    is_stale = datetime_to_ns(trust_context.pinned_at) + window * 1_000_000_000 < datetime_to_ns(now)
     result.freshness = "stale" if is_stale else "fresh"
     result.head_sequence = chain_check.head_sequence
     result.head_digest = chain_check.head_digest
@@ -248,13 +259,13 @@ def verify(
         if record.state != "outstanding":
             return _fail(8, f"delegation {task_id}/{attempt_id} is already {record.state}", result, code="receipt.already_terminal")
         if record.delegation_digest != digest:
-            return _fail(8, f"receipt digest {digest} does not match outstanding {record.delegation_digest}", result, code="receipt.digest_mismatch")
+            return _fail(8, f"receipt digest {digest} does not match outstanding {record.delegation_digest}", result, code="binding.mismatch")
         if executor != record.target_node_id:
             return _fail(8, f"receipt executor {executor} != target {record.target_node_id}", result, code="receipt.wrong_executor")
         try:
             closed = pending_store.accept_terminal(doc)
         except PendingStoreError as exc:
-            return _fail(8, f"receipt acceptance failed: {exc}", result, code="receipt.binding_mismatch")
+            return _fail(8, f"receipt acceptance failed: {exc}", result, code="binding.mismatch")
         result.terminal_receipt = closed.terminal_receipt
         result.ok = True
         result.admitted = True
@@ -314,24 +325,25 @@ def _resolve_document_key(
     doc: dict[str, Any],
     expected_kind: str,
     chain: list[dict[str, Any]],
-    at: datetime,
-) -> bytes | None:
-    """Resolve the document's issuer key within the pinned chain.
+    at_ns: int,
+) -> KeyResolution:
+    """Resolve the document's issuer key within the pinned chain (detailed).
 
     A node manifest is signed by a key valid in the state BEFORE the manifest
     (the previous manifest; the genesis signs itself as a possession proof), so
     its own signature is checked against that prior context. Delegations and
     receipts resolve against the newest manifest at their ``issued_at``.
+    Returns a ``KeyResolution`` distinguishing unknown from not-valid keys.
     """
     if expected_kind == KIND_MANIFEST:
         doc_digest = content_digest_of(doc)
         for index, manifest in enumerate(chain):
             if content_digest_of(manifest) == doc_digest:
                 context = chain[index - 1] if index > 0 else chain[index]
-                return resolve_key_in_manifest(context, doc["issuer"]["kid"], at)
+                return resolve_key_in_manifest_detailed(context, doc["issuer"]["kid"], at_ns)
         context = chain[0] if chain else doc
-        return resolve_key_in_manifest(context, doc["issuer"]["kid"], at)
-    return resolve_key_for(chain, doc["issuer"]["node_id"], doc["issuer"]["kid"], at)
+        return resolve_key_in_manifest_detailed(context, doc["issuer"]["kid"], at_ns)
+    return resolve_key_detailed(chain, doc["issuer"]["node_id"], doc["issuer"]["kid"], at_ns)
 
 
 @dataclass(frozen=True)
@@ -372,9 +384,3 @@ def _evaluate_authority_and_budget(body: dict[str, Any], policy: VerificationPol
         if policy.max_output_bytes_cap is not None and ceiling > policy.max_output_bytes_cap:
             return AdmissionRejection("budget.unenforceable", f"max_output_bytes {ceiling} exceeds local cap {policy.max_output_bytes_cap}")
     return None
-
-
-def _timedelta_seconds(seconds: int) -> Any:
-    from datetime import timedelta
-
-    return timedelta(seconds=seconds)
