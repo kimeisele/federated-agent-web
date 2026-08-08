@@ -1,0 +1,35 @@
+{
+  "warning": "TEST-ONLY fixture key material. Grants no authority. Never used outside this conformance package.",
+  "keys": {
+    "issuer": {
+      "kid": "sha256:3b4fbe09abcfa06a0a34d3a8be399c375afb94a79bd34d8a05783eab336e2d71",
+      "public_key": "c3z6ruYASYOpGdl314j1BCjMTnVetx6svgIPF-DK-Y8",
+      "private_key": "OE6u4qoQU-UeC1GHJRiX697tnup2CWLrwJuo9GUQYis"
+    },
+    "executor": {
+      "kid": "sha256:9172b2c0d89a205dbc277942caa37df980f5d346fadb80024b4c9bbe4af3a364",
+      "public_key": "RvxD34pAfY7P4ycycQAK_G5sEhjLPSsbkwuIEbU6wDg",
+      "private_key": "y5qBNKv3zE4ve8DXDd6-wiRnHRGCBJDrDWPOpCdw9jY"
+    },
+    "boundary": {
+      "kid": "sha256:3a935d7688c4a9c3da8c0feaff070715ac5343d12cfff84e9fab786d8f9f23fc",
+      "public_key": "6y-I9HxEYdq_Lf_9s_u-t9tJQENDDufrNTs_jkzD36s",
+      "private_key": "bvrUqZw-hCLxJx1a4GKCSuB-5SHzFy3wYk8oznuVdhI"
+    },
+    "rotation1": {
+      "kid": "sha256:eb4caae319bdcd70a1c0a28f2b9a4b655c8b6f8f411b5d8734afa549b841280d",
+      "public_key": "NDgsQf0OhUCTUENrK99m4VAGgjlCPuhH75-60zSvd6s",
+      "private_key": "dL_1qyuO2oG4goTPQ-0rII69rjg_dFEh35ew9gi3zFo"
+    },
+    "rotation2": {
+      "kid": "sha256:0f58abfcd4c047f59ea2bf102df4bf180a3fd866f2d6c5487ea1e215cee94f1c",
+      "public_key": "WT6QOSZHkbvTWIX2OF0NpJIPQ73EeWuEG3psUF7Ih_I",
+      "private_key": "m4XAncFh0u8JbnKFKYMU9BCSDPu_wHx9mt-nknP6fOo"
+    },
+    "foreign": {
+      "kid": "sha256:8aa157675eaabac7b1e8303b3774565be49e7525a3558c4ce743ed085f521776",
+      "public_key": "mzsZucSPgoOWGufEuy5qifP_1VdiffEw3qYs1dsGlRQ",
+      "private_key": "CuKpDoaErYUDN4HP3noKZ50UOAdCiCyPd_I7abbErTs"
+    }
+  }
+}

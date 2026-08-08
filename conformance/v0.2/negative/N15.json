@@ -1,0 +1,37 @@
+{
+  "kind": "faw-receipt",
+  "spec_version": "0.2",
+  "id": "20000000-0000-4000-8000-000000000009",
+  "issued_at": "2026-01-01T00:10:30Z",
+  "issuer": {
+    "node_id": "urn:faw:conformance-executor-0001",
+    "kid": "sha256:9172b2c0d89a205dbc277942caa37df980f5d346fadb80024b4c9bbe4af3a364"
+  },
+  "body": {
+    "receipt_id": "20000000-0000-4000-8000-000000000009",
+    "task_id": "40000000-0000-4000-8000-000000000001",
+    "attempt_id": "40000000-0000-4000-8000-000000000002",
+    "delegation_digest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "executor_node_id": "urn:faw:conformance-executor-0001",
+    "status": "succeeded",
+    "started_at": "2026-01-01T00:10:00Z",
+    "finished_at": "2026-01-01T00:10:01Z",
+    "artifacts": [
+      {
+        "name": "result.json",
+        "media_type": "application/json",
+        "digest": "sha256:cdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcdcd",
+        "size": 18,
+        "location": "mem://result.json"
+      }
+    ],
+    "usage": {
+      "wall_seconds": 1,
+      "output_bytes": 18
+    }
+  },
+  "signature": {
+    "alg": "Ed25519",
+    "value": "BU_QUtV1zI8jkaKarwXaLX43DS1SSFZgKsqH2k8JmAnPyjSK-HW_3rcQ64W_omNPt4fdL-zFNZNLg7ptZi1JBw"
+  }
+}

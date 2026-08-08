@@ -1,0 +1,8 @@
+{
+  "task_id": "40000000-0000-4000-8000-000000000001",
+  "attempt_id": "40000000-0000-4000-8000-000000000002",
+  "delegation_digest": "sha256:2c8e8571ce4617289af57302fe0dba514a8f0a73820ecb41f7dddedb4c18ec3d",
+  "executor_node_id": "urn:faw:conformance-executor-0001",
+  "status": "outstanding",
+  "delegation_source": "source/delegation-source.json"
+}
