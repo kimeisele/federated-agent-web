@@ -1,4 +1,4 @@
-"""Stable verification rejection-code tests (v0.3)."""
+"""Stable verification rejection-code tests (v0.3, aligned to the v0.5 profile)."""
 
 from __future__ import annotations
 
@@ -95,11 +95,11 @@ class TestCorruptSignatureHelper:
 class TestParseCodes:
     def test_parse_duplicate_key(self):
         r = _verify(b'{"a":1,"a":2}', kind=KIND_DELEGATION, chain=trust_for(make_node_pair()[0]))
-        _assert_code(r, "parse.duplicate_key")
+        _assert_code(r, "parse.duplicate_member")
 
     def test_parse_invalid_json(self):
         r = _verify(b"not json", kind=KIND_DELEGATION, chain=trust_for(make_node_pair()[0]))
-        _assert_code(r, "parse.invalid")
+        _assert_code(r, "parse.invalid_json")
 
 
 class TestDocumentCodes:
@@ -108,7 +108,7 @@ class TestDocumentCodes:
         delegation = build_delegation(issuer, target_node_id=executor.node_id)
         r = _verify(canonical.canonical_bytes(delegation), kind=KIND_RECEIPT,
                      chain=trust_for(issuer), local_id=executor.node_id)
-        _assert_code(r, "document.wrong_kind")
+        _assert_code(r, "document.kind_mismatch")
 
     def test_schema_invalid(self):
         issuer, executor = make_node_pair()
@@ -125,7 +125,7 @@ class TestDelegationAudience:
         delegation = build_delegation(issuer, target_node_id="urn:faw:wrong-node-0001")
         r = _verify(canonical.canonical_bytes(delegation), kind=KIND_DELEGATION,
                      chain=trust_for(issuer), local_id=executor.node_id)
-        _assert_code(r, "delegation.wrong_audience")
+        _assert_code(r, "audience.mismatch")
 
 
 class TestTimeCodes:
@@ -135,7 +135,7 @@ class TestTimeCodes:
         d["body"]["expires_at"] = ts(now() - timedelta(seconds=100))
         r = _verify(canonical.canonical_bytes(d), kind=KIND_DELEGATION,
                      chain=trust_for(issuer), local_id=executor.node_id)
-        _assert_code(r, "time.ordering")
+        _assert_code(r, "temporal.invalid")
 
     def test_expired(self):
         issuer, executor = make_node_pair()
@@ -146,7 +146,7 @@ class TestTimeCodes:
         r = _verify(canonical.canonical_bytes(d), kind=KIND_DELEGATION,
                      chain=trust_for(issuer), local_id=executor.node_id,
                      at=base + timedelta(seconds=100))
-        _assert_code(r, "time.expired")
+        _assert_code(r, "temporal.invalid")
 
     def test_wrong_receipt_issuer(self):
         issuer, executor = make_node_pair()
@@ -167,9 +167,10 @@ class TestTrustCodes:
         r = _verify(canonical.canonical_bytes(delegation), kind=KIND_DELEGATION,
                      chain=PinnedManifestTrustContext.from_chain(chain),
                      local_id=executor.node_id)
-        _assert_code(r, "trust.chain_invalid")
+        _assert_code(r, "trust.invalid_chain")
 
-    def test_key_unresolved(self):
+    def test_key_known_but_not_valid(self):
+        """A known key that is retired (no longer eligible) is key_not_valid."""
         from federated_agent_web.documents import KIND_DELEGATION as _KD
         from federated_agent_web.documents import build_document
 
@@ -193,7 +194,7 @@ class TestTrustCodes:
                                 kid=old_key.kid, private_raw=old_key.private_raw)
         r = _verify(canonical.canonical_bytes(forged), kind=KIND_DELEGATION,
                      chain=trust_for(issuer), local_id=executor.node_id)
-        _assert_code(r, "trust.key_unresolved")
+        _assert_code(r, "trust.key_not_valid")
 
     def test_stale(self):
         issuer, executor = make_node_pair()
@@ -249,7 +250,7 @@ class TestReceiptBindingCodes:
         receipt = build_receipt(executor, delegation, delegation_digest="sha256:" + "aa" * 32)
         r = _verify(canonical.canonical_bytes(receipt), kind=KIND_RECEIPT,
                      chain=trust_for(executor), pending=pending)
-        _assert_code(r, "receipt.digest_mismatch")
+        _assert_code(r, "binding.mismatch")
 
     def test_wrong_executor(self, tmp_path):
         issuer, executor, delegation, digest, pending = self._setup(tmp_path)

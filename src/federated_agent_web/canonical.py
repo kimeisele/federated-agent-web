@@ -19,6 +19,8 @@ __all__ = [
     "CanonicalizationError",
     "DuplicateMemberError",
     "UnsupportedNumberError",
+    "InvalidJsonError",
+    "InvalidUnicodeError",
     "parse_strict",
     "canonical_bytes",
     "content_digest",
@@ -41,6 +43,14 @@ class DuplicateMemberError(CanonicalizationError):
 
 class UnsupportedNumberError(CanonicalizationError):
     """Raised for NaN/Infinity, negative zero, or out-of-domain numbers."""
+
+
+class InvalidJsonError(CanonicalizationError):
+    """Raised for syntactically malformed JSON input."""
+
+
+class InvalidUnicodeError(CanonicalizationError):
+    """Raised for invalid UTF-8 input bytes or lone surrogate code points."""
 
 
 def _reject_duplicate_members(pairs: list[tuple[str, Any]]) -> dict[str, Any]:
@@ -82,7 +92,7 @@ def _reject_surrogates(obj: Any) -> None:
     if isinstance(obj, str):
         for char in obj:
             if 0xD800 <= ord(char) <= 0xDFFF:
-                raise CanonicalizationError("lone surrogate code point is not allowed")
+                raise InvalidUnicodeError("lone surrogate code point is not allowed")
     elif isinstance(obj, dict):
         for key, value in obj.items():
             _reject_surrogates(key)
@@ -98,11 +108,15 @@ def parse_strict(data: bytes) -> dict[str, Any]:
     Duplicate detection happens here, at parse time, via ``object_pairs_hook``;
     a JCS pass over an already-parsed mapping cannot recover collapsed
     duplicates.
+
+    Failure classes are machine-distinguishable (§7 of the v0.5 profile):
+    ``DuplicateMemberError``, ``UnsupportedNumberError``, ``InvalidJsonError``,
+    and ``InvalidUnicodeError`` — never classified by message text.
     """
     try:
         text = data.decode("utf-8")
     except UnicodeDecodeError as exc:
-        raise CanonicalizationError(f"input is not valid UTF-8: {exc}") from exc
+        raise InvalidUnicodeError(f"input is not valid UTF-8: {exc}") from exc
     try:
         obj = json.loads(
             text,
@@ -114,10 +128,10 @@ def parse_strict(data: bytes) -> dict[str, Any]:
     except (json.JSONDecodeError, CanonicalizationError) as exc:
         if isinstance(exc, CanonicalizationError):
             raise
-        raise CanonicalizationError(f"invalid JSON: {exc}") from exc
+        raise InvalidJsonError(f"invalid JSON: {exc}") from exc
     _reject_surrogates(obj)
     if not isinstance(obj, dict):
-        raise CanonicalizationError("top-level JSON value must be an object")
+        raise InvalidJsonError("top-level JSON value must be an object")
     return obj
 
 
