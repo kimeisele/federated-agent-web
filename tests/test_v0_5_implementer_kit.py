@@ -32,9 +32,9 @@ TEST_HEAD = "a" * 40
 # the two external digests.
 EXPECTED_MANIFEST_FILES = 66
 EXPECTED_ARCHIVE_MEMBERS = 67
-EXPECTED_ARCHIVE_SIZE = 53884
-EXPECTED_MANIFEST_SHA256 = "52123679a522286742a2ce0648a77824f489e5c66a122ab171a45ff233dddc50"
-EXPECTED_ARCHIVE_SHA256 = "66e3f6e274e890ef3a0c58ca658d243fa07901d262603d3050297abc92ff7b40"
+EXPECTED_ARCHIVE_SIZE = 54256
+EXPECTED_MANIFEST_SHA256 = "aa41dc991b3858a1cc401ffcc992e1faeb5a964351b1f9340250c5cdfc272778"
+EXPECTED_ARCHIVE_SHA256 = "7a03a38dc2da4687bf4c9e74e699c9bbf3a43a7950cf1b6df75190a76c227511"
 
 # Frozen interoperability profile bytes (must remain byte-identical).
 FROZEN_PROFILE_SHA256 = "17c6a5585ba1c5f63dff45a1783256a13db19308c488f519adf8a39798f0af48"
@@ -462,6 +462,37 @@ def test_layer3_clean_room_independence_explicit():
     assert "separate reference-side evaluator/operator" in texts["plan"]
     assert "post-build evidence" in texts["brief"]
     assert "clearly marked pending" in texts["brief"]
+
+
+def test_adr_citations_are_provenance_only():
+    """Delivered clean-room guidance communicates: ADR references are
+    provenance/history only; no ADR is a required implementation input; no
+    instruction tells the second implementer to fetch an ADR from the
+    reference repository."""
+    texts = _kit_guidance_texts()
+    for name in ("brief", "plan"):
+        lowered = texts[name].lower()
+        assert "provenance/history only" in lowered, name
+        assert "adr access is not required" in lowered, name
+    # The plan states the MUST NOT fetch-or-inspect rule for ADR resolution.
+    assert "must not fetch or inspect the reference repository" in texts["plan"].lower()
+    # The brief forbids fetching the ADR or the reference repository.
+    assert "must not fetch the adr or the reference repository" in texts["brief"].lower()
+    # Frozen-material ADR identifiers (e.g. the profile's ADR 0003 reference)
+    # are covered by the provenance-only rule in the brief.
+    assert "adr 0003" in texts["brief"].lower()
+    # No imperative instruction tells the implementer to fetch/retrieve an
+    # ADR (the only 'fetch the adr' occurrences are inside MUST NOT
+    # prohibitions, asserted above).
+    forbidden = (
+        "fetch adr 0002", "fetch adr 0003",
+        "download the adr", "retrieve the adr", "look up adr",
+        "you must fetch", "please fetch the adr",
+    )
+    for name, text in texts.items():
+        lowered = text.lower()
+        for phrase in forbidden:
+            assert phrase not in lowered, f"{name} instructs: {phrase}"
 
 
 def test_no_instruction_to_access_or_execute_python_reference():

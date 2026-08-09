@@ -3,7 +3,7 @@
 The v0.5 gate requires that the second implementation verify the reference
 implementation's documents and vice versa. This plan defines the evidence in
 four layers so the claim is testable, bounded, and reproducible. It is part
-of the implementer kit (a required input) and references only kit inputs.
+of the implementer kit (a required input).
 
 The acceptance comparison at every layer is:
 
@@ -14,6 +14,17 @@ and stable semantic rejection category
 
 Exact human-readable wording, internal implementation structure, call
 stacks, and diagnostics need not match.
+
+## Kit self-containment and ADR citations
+
+All inputs required to implement and run the clean-room verifier are
+contained in the delivered kit. Any ADR identifier mentioned in kit
+material (for example ADR 0002) is provenance/history only: ADR access is
+NOT required, and an implementer MUST NOT fetch or inspect the reference
+repository merely to resolve an ADR citation. Every operative requirement
+is stated directly in the delivered kit documents; the complete operative
+independence rule is the rule written in this plan and the implementer
+brief, not a citation target.
 
 ## Settled cross-language contract
 
@@ -80,7 +91,9 @@ document comes from the committed manifest fixtures in the kit.
 Layer 3 is a post-build bidirectional interoperability evaluation across
 the repository boundary. The Go implementation MUST NOT import, vendor,
 clone, inspect, invoke, or depend on the Python reference implementation or
-its tests (ADR 0002 independence declaration).
+its tests. This is the complete operative independence rule; the ADR 0002
+identifier referenced by earlier kit material is provenance/history only
+and access to it is NOT required.
 
 The Go side:
 
@@ -107,7 +120,8 @@ Constraints:
 - emitter output must be deterministic for a given seed/key so the evidence
   is reproducible;
 - the emitter is not a node, transport, executor, or production signing
-  service (ADR 0002);
+  service (this operative boundary is stated here; the ADR 0002 citation in
+  earlier kit material is provenance/history only).
 - the Go implementation never runs or reads the Python reference.
 
 ## Layer 4 — Negative interoperability
@@ -139,8 +153,9 @@ repository to run:
 The implementation report records the kit provenance — the frozen
 reference-material commit, the manifest digest, the archive digest, and the
 kit build HEAD — the Layer 3 reference-side verification evidence, the
-negative-interoperability matrix (N01–N15), and the independence declaration
-required by ADR 0002.
+negative-interoperability matrix (N01–N15), and the independence
+information required by this plan and the implementer brief (the ADR 0002
+reference in earlier kit material is provenance/history only).
 
 ## Gate
 

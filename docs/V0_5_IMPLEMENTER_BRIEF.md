@@ -386,6 +386,14 @@ execute the Python reference repository; Layer 3 reference verification is
 performed only by the separate reference-side evaluator/operator as
 post-build, externally recorded evidence.
 
+The ADR 0002 citation above is provenance/history only. Every operative
+requirement is fully stated in this brief and the interoperability plan;
+ADR access is NOT required, and the second implementation does not need and
+must not fetch the ADR or the reference repository. This rule also covers
+ADR identifiers visible in frozen material — for example the
+interoperability profile's ADR 0003 status reference: such identifiers are
+provenance/history and are not implementation inputs.
+
 ---
 
 ## Known questions — resolved and remaining
