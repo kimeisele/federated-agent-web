@@ -19,8 +19,18 @@ kit has been refreshed to include the profile, the complete conformance
 package, and the interoperability plan as a required input, and is pinned
 to the new reference material; the kit's guidance documents are consistent
 with the settled contract, including the Layer 3 repository-boundary
-split. Kit review is pending. No second implementation exists yet, and the
-v0.5 gate is not complete.
+split. Kit review is complete, and the exact reviewed kit is delivered as a
+standalone machine-addressable artifact at
+`interop/v0.2/faw-v0.2-implementer-kit.tar.gz` (identity record:
+`interop/v0.2/KIT_DELIVERY.md`; approved v0.5 kit identity recorded in
+#37), so an external implementer can obtain and verify it without cloning
+or browsing either implementation repository. The Class-B Go verifier
+(`kimeisele/faw-verifier-go`) exists and its bidirectional interoperability
+Layers 1–4 pass; #37 (Class-B Go verifier implementation) and #38
+(Layer-3 reference-side evaluation) are completed. The strict v0.5
+independence gate remains OPEN: Class-A (independent external
+implementation) evidence is still missing, and v0.5 is NOT complete.
+Issue #8 (external read-only FAW trial) remains open.
 
 ## Decisions already taken
 
