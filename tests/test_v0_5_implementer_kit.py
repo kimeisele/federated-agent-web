@@ -417,6 +417,102 @@ def test_extra_private_key_file_under_conformance_fails_build(tmp_path):
     assert "deploy-keys.json" in str(exc.value)
 
 
+# ---------------------------------------------------------------------------
+# Narrowed conformance allowlist (exactly conformance/v0.2/**)
+# ---------------------------------------------------------------------------
+
+def _tamper_manifest_add_file(root: Path, rel_path: str, content: bytes) -> None:
+    """Write a file into the synthetic root and add a byte-exact manifest
+    entry for it."""
+    dst = root / rel_path
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    dst.write_bytes(content)
+    manifest_path = root / "interop/v0.2/INPUT_MANIFEST.json"
+    tampered = json.loads(manifest_path.read_text())
+    tampered["files"] = sorted(
+        tampered["files"] + [{
+            "path": rel_path,
+            "sha256": hashlib.sha256(content).hexdigest(),
+            "size_bytes": len(content),
+            "classification": "conformance-fixture",
+            "reason": "tampered test fixture",
+        }],
+        key=lambda e: e["path"],
+    )
+    manifest_path.write_text(json.dumps(tampered))
+
+
+def test_conformance_other_path_rejected_from_allowlist(tmp_path):
+    """Manifest-listed paths outside conformance/v0.2/ are rejected."""
+    root = _synthetic_root(tmp_path / "other-path")
+    _tamper_manifest_add_file(root, "conformance/other/private.json", b'{"x": 1}\n')
+    with pytest.raises(BUILDER.KitBuildError) as exc:
+        BUILDER.build(tmp_path / "out", root=root)
+    assert "outside allowlist" in str(exc.value)
+
+
+def test_conformance_other_unlisted_file_does_not_enter_kit(tmp_path):
+    """Completeness scanning is scoped to conformance/v0.2/; an unlisted
+    file under conformance/other/ is neither scanned nor archived."""
+    root = _synthetic_root(tmp_path / "scoped")
+    (root / "conformance" / "other").mkdir(parents=True, exist_ok=True)
+    (root / "conformance/other/notes.json").write_text("noise\n")
+    result = BUILDER.build(tmp_path / "out", root=root)
+    names = _member_names(Path(result["archive_path"]).read_bytes())
+    assert "conformance/other/notes.json" not in names
+
+
+# ---------------------------------------------------------------------------
+# Builder-level TEST-ONLY key hygiene
+# ---------------------------------------------------------------------------
+
+def test_rogue_key_under_conformance_fails_key_hygiene(tmp_path):
+    """A manifest-listed private-key-bearing file under an otherwise allowed
+    path fails specifically because of builder key hygiene."""
+    root = _synthetic_root(tmp_path / "rogue-conformance")
+    _tamper_manifest_add_file(
+        root, "conformance/v0.2/context/rogue-key.json",
+        b'{"kid": "sha256:" + "00"*32, "private_key": "AAAA"}\n',
+    )
+    with pytest.raises(BUILDER.KitBuildError) as exc:
+        BUILDER.build(tmp_path / "out", root=root)
+    assert "private key material" in str(exc.value)
+    assert "rogue-key.json" in str(exc.value)
+
+
+def test_rogue_key_under_vectors_fails_key_hygiene(tmp_path):
+    """A manifest-listed private-key-bearing file under vectors/** also
+    fails builder key hygiene."""
+    root = _synthetic_root(tmp_path / "rogue-vectors")
+    _tamper_manifest_add_file(
+        root, "vectors/signatures/rogue-key.json",
+        b'{"private_key_b64url": "QUFBQQ"}\n',
+    )
+    with pytest.raises(BUILDER.KitBuildError) as exc:
+        BUILDER.build(tmp_path / "out", root=root)
+    assert "private key material" in str(exc.value)
+    assert "rogue-key.json" in str(exc.value)
+
+
+def test_rogue_pem_key_fails_key_hygiene(tmp_path):
+    """PEM private-key material is caught by the builder check."""
+    root = _synthetic_root(tmp_path / "rogue-pem")
+    _tamper_manifest_add_file(
+        root, "conformance/v0.2/context/rogue.pem",
+        b"-----BEGIN PRIVATE KEY-----\nAAAA\n-----END PRIVATE KEY-----\n",
+    )
+    with pytest.raises(BUILDER.KitBuildError) as exc:
+        BUILDER.build(tmp_path / "out", root=root)
+    assert "private key material" in str(exc.value)
+
+
+def test_sanctioned_test_only_files_still_build(tmp_path):
+    """The two sanctioned TEST-ONLY fixture files build successfully."""
+    result = BUILDER.build(tmp_path / "sanctioned")
+    names = _member_names(Path(result["archive_path"]).read_bytes())
+    assert TEST_ONLY_KEY_FILES <= set(names)
+
+
 def test_manifest_does_not_list_itself(tmp_path):
     listed = {e["path"] for e in MANIFEST["files"]}
     assert "interop/v0.2/INPUT_MANIFEST.json" not in listed

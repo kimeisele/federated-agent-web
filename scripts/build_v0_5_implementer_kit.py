@@ -69,7 +69,22 @@ FIXED_ALLOWED = {
 # manifest (conformance/v0.2/ completeness includes the package's own
 # manifest.json — the package manifest's self-hash limitation applies only
 # to its internal files map, never to this outer manifest).
-ALLOWED_DIRS = ("conformance", "schemas", "vectors")
+# Directories whose every existing file must be listed in the manifest.
+# Conformance is scoped to exactly conformance/v0.2/ — arbitrary
+# conformance/** is NOT part of the kit allowlist. The package's own
+# manifest.json is included (its self-hash limitation applies only to its
+# internal files map, never to this outer manifest).
+ALLOWED_DIR_PREFIXES = ("conformance/v0.2", "schemas", "vectors")
+COMPLETENESS_ROOTS = (Path("conformance") / "v0.2", Path("schemas"), Path("vectors"))
+
+# The only files that may carry TEST-ONLY private fixture key material.
+# Both are public reproducibility fixtures only: no authority, never a
+# deployment identity, never production credentials.
+TEST_ONLY_KEY_PATHS = frozenset({
+    "vectors/signatures/keypair.json",
+    "conformance/v0.2/context/test-only-keys.json",
+})
+PRIVATE_KEY_MARKERS = (b'"private_key"', b'"private_key_b64url"', b"BEGIN PRIVATE KEY")
 ALLOWED_CLASSIFICATIONS = {
     "normative",
     "normative-summary",
@@ -187,7 +202,7 @@ def read_head_sha(root: Path) -> str:
 def _is_allowlisted(path: str) -> bool:
     if path in FIXED_ALLOWED:
         return True
-    return any(path.startswith(prefix + "/") for prefix in ALLOWED_DIRS)
+    return any(path.startswith(prefix + "/") for prefix in ALLOWED_DIR_PREFIXES)
 
 
 def load_and_validate_manifest(root: Path) -> dict:
@@ -289,12 +304,26 @@ def check_allowlist_complete(root: Path, manifest: dict) -> None:
     for fixed in sorted(FIXED_ALLOWED - {MANIFEST_RELPATH}):
         if fixed not in listed:
             raise KitBuildError(f"required fixed file missing from manifest: {fixed}")
-    for prefix in ALLOWED_DIRS:
-        for f in sorted((root / prefix).rglob("*")):
+    for rel_root in COMPLETENESS_ROOTS:
+        for f in sorted((root / rel_root).rglob("*")):
             if f.is_file():
                 rel = str(f.relative_to(root))
                 if rel not in listed:
                     raise KitBuildError(f"allowlisted file missing from manifest: {rel}")
+
+
+def check_key_hygiene(path: str, content: bytes) -> None:
+    """Builder-level TEST-ONLY key hygiene.
+
+    Private-key-bearing content is rejected everywhere except the two exact
+    sanctioned TEST-ONLY fixture files; the check runs during verified-entry
+    validation, independent of any test scanning the final archive.
+    """
+    if path in TEST_ONLY_KEY_PATHS:
+        return
+    for marker in PRIVATE_KEY_MARKERS:
+        if marker in content:
+            raise KitBuildError(f"private key material in non-sanctioned file: {path}")
 
 
 def verify_entries(root: Path, manifest: dict) -> list[dict]:
@@ -313,6 +342,7 @@ def verify_entries(root: Path, manifest: dict) -> list[dict]:
         if not stat.S_ISREG(st.st_mode):
             raise KitBuildError(f"allowlisted file is not a regular file: {entry['path']}")
         content = p.read_bytes()
+        check_key_hygiene(entry["path"], content)
         if len(content) != entry["size_bytes"]:
             raise KitBuildError(
                 f"size mismatch for {entry['path']}: manifest {entry['size_bytes']} "
