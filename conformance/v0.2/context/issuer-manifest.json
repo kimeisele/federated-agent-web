@@ -1,0 +1,43 @@
+{
+  "kind": "faw-node-manifest",
+  "spec_version": "0.2",
+  "id": "10000000-0000-4000-8000-000000000001",
+  "issued_at": "2026-01-01T00:00:00Z",
+  "issuer": {
+    "node_id": "urn:faw:conformance-issuer-0001",
+    "kid": "sha256:3b4fbe09abcfa06a0a34d3a8be399c375afb94a79bd34d8a05783eab336e2d71"
+  },
+  "body": {
+    "node_id": "urn:faw:conformance-issuer-0001",
+    "display_name": "conformance fixture node",
+    "manifest_sequence": 1,
+    "previous_manifest_digest": null,
+    "manifest_freshness_window_seconds": 3600,
+    "capabilities": [
+      "hash_file"
+    ],
+    "endpoints": [],
+    "keys": [
+      {
+        "kid": "sha256:3b4fbe09abcfa06a0a34d3a8be399c375afb94a79bd34d8a05783eab336e2d71",
+        "alg": "Ed25519",
+        "public_key": "c3z6ruYASYOpGdl314j1BCjMTnVetx6svgIPF-DK-Y8",
+        "status": "active",
+        "valid_from": "2026-01-01T00:00:00Z"
+      }
+    ],
+    "authorization_policy": {
+      "default_deny": true,
+      "required_grants": []
+    },
+    "cost_class": {
+      "tier": "free"
+    },
+    "rate_limits": {},
+    "status": "active"
+  },
+  "signature": {
+    "alg": "Ed25519",
+    "value": "GfTsN12LK7Qxzd9Rbjbh76VZ18YpQqz7qHrADuX4a9XbBFAXiHJcul3ytHh65cx6G0dndmsSIm26TSRxzVxDBw"
+  }
+}
