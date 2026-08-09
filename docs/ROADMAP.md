@@ -6,17 +6,21 @@
 v0.3 hardening complete; the v0.4 transport-independence gate is complete
 (evidence in `docs/NADI_LIVE_REHEARSAL.md`). v0.5 clean-room preparation
 is complete: ADR 0002, the clean-room protocol
-(`docs/V0_5_CLEAN_ROOM_PROTOCOL.md`), the implementer brief, and the hashed
-implementer kit (`interop/v0.2/INPUT_MANIFEST.json`) define the boundary
-for a second implementation. Cross-language semantics are pinned: ADR 0003
-and the interoperability profile
+(`docs/V0_5_CLEAN_ROOM_PROTOCOL.md`), the implementer brief, the
+interoperability plan, and the hashed implementer kit
+(`interop/v0.2/INPUT_MANIFEST.json`) define the boundary for a second
+implementation. Cross-language semantics are pinned: ADR 0003 and the
+interoperability profile
 (`docs/FAW_V0_2_INTEROPERABILITY_PROFILE.md`) define the verification
 semantics, and the language-neutral conformance package
-(`conformance/v0.2/**`) implements the N01–N15 / P01–P05 fixture matrix;
-the reference verifier is aligned to the profile. The implementer kit has
-been refreshed to include the profile and the complete conformance package
-and is pinned to the new reference material; kit review is pending. No
-second implementation exists yet, and the v0.5 gate is not complete.
+(`conformance/v0.2/**`) implements the committed N01–N15 / P01–P05 fixture
+matrix; the reference verifier is aligned to the profile. The implementer
+kit has been refreshed to include the profile, the complete conformance
+package, and the interoperability plan as a required input, and is pinned
+to the new reference material; the kit's guidance documents are consistent
+with the settled contract, including the Layer 3 repository-boundary
+split. Kit review is pending. No second implementation exists yet, and the
+v0.5 gate is not complete.
 
 ## Decisions already taken
 

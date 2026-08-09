@@ -271,8 +271,15 @@
       "classification": "non-normative-guidance",
       "path": "docs/V0_5_IMPLEMENTER_BRIEF.md",
       "reason": "Implementer scope, verification order, CLI and result-format contract; non-normative guidance.",
-      "sha256": "f4ade76a97fa9b6aa220f65637ce8ad242d8be77b5790d2ac16adbf507fc0f66",
-      "size_bytes": 21678
+      "sha256": "100fdfcf6e5d42109149f5d3bc9b2dd4cf56faa49e7efd4da06ea19411d0bb6d",
+      "size_bytes": 21157
+    },
+    {
+      "classification": "non-normative-guidance",
+      "path": "docs/V0_5_INTEROPERABILITY_PLAN.md",
+      "reason": "Interoperability/evidence plan: four-layer evidence model and Layer 3 repository-boundary split; required kit input.",
+      "sha256": "3601c58ce4b16a8d54df6a8f4f87067cecfa84491a28f84062188ba82f1a75a4",
+      "size_bytes": 6669
     },
     {
       "classification": "normative",

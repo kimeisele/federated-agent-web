@@ -60,6 +60,7 @@ FIXED_ALLOWED = {
     "SPEC.md",
     "docs/federated-agent-web-build-spec-v0.2.md",
     "docs/FAW_V0_2_INTEROPERABILITY_PROFILE.md",
+    "docs/V0_5_INTEROPERABILITY_PLAN.md",
     "SECURITY.md",
     "LICENSE",
     "docs/V0_5_IMPLEMENTER_BRIEF.md",

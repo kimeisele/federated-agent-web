@@ -248,6 +248,14 @@ store layout), and for every reject: the exact accepted `source` and
 package must be consumable from the raw fixtures and its manifest alone,
 without any Python source or test.
 
+The frozen interoperability profile's historical phrasing ("planned
+matrix", "fixtures not yet created", "future fixture package") describes
+repository status at the time that profile was authored; it is NOT an
+instruction to create another vector package. The matrix semantics remain
+normative, and `conformance/v0.2/**` — N01–N15 and P01–P05 with their
+records — is the committed realization; no implementer may infer that
+negative fixtures are still missing.
+
 Both sanctioned TEST-ONLY key files — `vectors/signatures/keypair.json` and
 `conformance/v0.2/context/test-only-keys.json` — are public reproducibility
 fixtures only: they grant no authority, are never deployment identities,
@@ -273,9 +281,14 @@ faw-verifier-go conformance-report <kit-directory>
   pass/fail per vector.
 - `fixtures emit <output-directory>` runs the conformance fixture emitter
   (deterministic, test-only signing).
-- `conformance-report <kit-directory>` runs the full layered
-  interoperability suite from `docs/V0_5_INTEROPERABILITY_PLAN.md` and emits
-  a machine-readable report.
+- `conformance-report <kit-directory>` runs the layered interoperability
+  suite from `docs/V0_5_INTEROPERABILITY_PLAN.md` and emits a
+  machine-readable report. It MUST NOT require Python or the FAW reference
+  repository to run: Layers 1, 2 and 4 are reported directly from the
+  delivered kit; Layer 3 emitter/evidence generation runs from Go; the
+  Layer 3 reference-verification result is reported as externally
+  supplied/post-build evidence or clearly marked pending until the separate
+  reference-side evaluation is performed.
 
 ## Machine-readable result format
 
@@ -303,9 +316,16 @@ Every verification operation emits one JSON object on stdout:
   defined by the kit build output.
 - `operation` is one of `verify-manifest`, `verify-delegation`,
   `verify-receipt`, `vectors`, `fixtures`, `conformance-report`.
-- On rejection, `ok` is `false` and `reason_code` is a stable
-  machine-readable code defined by the second implementation from the
-  semantic rejection categories (see the ambiguity inventory).
+- On rejection, `ok` is `false` and `reason_code` is one of the exact
+  thirteen stable semantic rejection categories pinned by
+  `docs/FAW_V0_2_INTEROPERABILITY_PROFILE.md`: `parse.invalid_json`,
+  `parse.duplicate_member`, `parse.invalid_unicode`,
+  `canonicalization.number_out_of_domain`, `schema.invalid`,
+  `document.kind_mismatch`, `audience.mismatch`, `temporal.invalid`,
+  `trust.invalid_chain`, `trust.unknown_key`, `trust.key_not_valid`,
+  `signature.invalid`, `binding.mismatch`. The taxonomy is NOT
+  implementation-defined; these categories are the cross-language
+  conformance categories and are used consistently everywhere in this kit.
 - `details` carries structured context (e.g. resolved head sequence and
   digest, evaluated fixture boundaries).
 - Exact equality with reference diagnostic wording is not required; the
@@ -323,11 +343,22 @@ Four layers, defined in `docs/V0_5_INTEROPERABILITY_PLAN.md`:
 
 1. vector reproduction;
 2. reference-to-Go verification of committed fixtures;
-3. Go-to-reference verification of emitted test-only fixtures;
-4. negative interoperability over a shared mutation set.
+3. Go-to-reference verification of emitted TEST-ONLY fixtures — a
+   post-build evaluation across the repository boundary: the Go side
+   deterministically emits fixtures and records bytes/digests/evidence; a
+   separate reference-side evaluator/operator verifies them with the Python
+   reference post-build; that result is recorded as interoperability
+   evidence;
+4. negative interoperability over the committed `conformance/v0.2/**`
+   package (N01–N15, P01–P05) with the exact profile categories per fixture.
 
 The acceptance comparison is `accept versus reject` and the stable semantic
 rejection category. Internal structure and call stacks are not compared.
+
+The second implementation MUST NOT import, vendor, clone, inspect, invoke,
+or depend on the Python reference implementation or its tests. Layer 3's
+reference-side verification is performed only by the separate
+reference-side evaluator/operator, never by the Go implementation.
 
 ## Erratum reporting
 
@@ -349,105 +380,51 @@ The implementation report must disclose (ADR 0002):
 - whether its operator or repository is controlled by the FAW maintainer.
 
 AI use does not automatically invalidate independence. Access to the Python
-implementation or its tests invalidates the clean-room claim.
+implementation or its tests invalidates the clean-room claim. No delivered
+clean-room instruction directs the second implementation to access or
+execute the Python reference repository; Layer 3 reference verification is
+performed only by the separate reference-side evaluator/operator as
+post-build, externally recorded evidence.
 
 ---
 
-## Known questions to be resolved by implementation
+## Known questions — resolved and remaining
 
-Classification legend:
+Most questions the brief previously listed as open are now resolved by the
+merged interoperability profile and the committed conformance package.
 
-```text
-clear from normative text
-needs additional vector
-needs spec clarification
-non-normative implementation choice
-```
+The following are **resolved** (by `docs/FAW_V0_2_INTEROPERABILITY_PROFILE.md`
+and/or committed fixtures; no implementation may treat them as open):
 
-1. **Exact duplicate-key detection requirements before schema validation.**
-   The governing spec requires duplicate-member rejection at parse time and
-   a strict-parse step before schema validation; the current positive
-   vectors contain no duplicate-member case.
-   Classification: clear from normative text (parse-time, before schema
-   validation); needs additional vector (no committed negative fixture).
+1. **Duplicate-key detection before schema validation** — resolved:
+   parse-time rejection is normative; negative case N01 (`parse.duplicate_member`)
+   is committed in `conformance/v0.2/negative/`.
+2. **Fractional-second equality** — resolved: parsed UTC instants with
+   nanosecond precision compare equal across lexical fraction encodings
+   (profile §2; P03); `.5Z` == `.50Z` == `.500000000Z`.
+3. **JCS number domain** — resolved: finite IEEE-754 binary64 only; safe
+   integers ±9007199254740991 (profile §1; P01/P02, N05/N06).
+4. **Unicode / lone-surrogate behavior** — resolved: invalid UTF-8 and
+   escaped lone surrogates are rejected (profile §6; N03/N04).
+5. **UUIDv7 time semantics** — resolved: IDs are opaque after syntax
+   validation; no semantics from the embedded timestamp (profile §3; P05).
+6. **Manifest key-validity boundaries** — resolved: half-open interval
+   `valid_from <= issued_at < valid_until` (profile §4; P04, N11).
+9. **Semantic rejection categories** — resolved: the exact thirteen
+   categories are pinned by the profile (§6) and used consistently; they are
+   not implementation-defined.
+10. **Negative fixture coverage** — resolved: the language-neutral package
+    `conformance/v0.2/**` is committed (N01–N15, P01–P05, source fixtures,
+    per-fixture records); negative coverage is no longer missing.
 
-2. **Accepted RFC 3339 fractional-second forms.** The schemas allow
-   `ss(.f{1,9})?Z` — whole seconds or 1–9 fractional digits, `Z` only. The
-   equality semantics of distinct fraction encodings (e.g. `.5` vs `.50` vs
-   none) for temporal comparison are not pinned.
-   Classification: schema form is clear from normative text; instant
-   equality of distinct encodings needs spec clarification.
+The following remain **non-normative implementation choices** (the spec
+permits either; the verifier documents its choice):
 
-3. **JCS number limits and representation.** The spec rejects NaN,
-   Infinity, negative zero, and out-of-domain numbers and requires exact JCS
-   serialization; the current number vector pins exponent forms and
-   `2^53 - 1`. The exact accepted integer domain (and the treatment of
-   numbers outside IEEE double precision) is not stated in the governing
-   spec.
-   Classification: needs spec clarification (domain bound); the current
-   vector set is a baseline, needs additional vector (boundary integers).
-
-4. **Unicode and lone-surrogate behavior.** The spec rejects invalid
-   Unicode and lone surrogates and preserves strings as supplied without
-   normalization. The unicode vector covers preservation; a lone-surrogate
-   negative fixture is not committed.
-   Classification: clear from normative text; needs additional vector
-   (escaped lone surrogate and ill-formed UTF-8 negatives).
-
-5. **UUIDv4 versus UUIDv7 schema behavior.** The identifier grammar
-   `[47]...-[89ab]...` accepts both v4 and v7. The governing spec says
-   v7 "when available", v4 acceptable. Whether a v7 timestamp component is
-   semantically checked against the document time is unspecified.
-   Classification: version-digit acceptance is clear from normative text;
-   v7 time semantics needs spec clarification.
-
-6. **Manifest key-validity boundaries at exact timestamps.** Keys declare
-   `valid_from` and optional `valid_until`; resolution requires the key be
-   "active and valid for the document's issuance time". Inclusive/exclusive
-   semantics exactly at the boundary timestamps are not stated.
-   Classification: needs spec clarification (boundary semantics); needs
-   additional vector (key valid exactly at issued_at).
-
-7. **Stale trust context: reject versus qualified pass.** The spec permits
-   either a policy rejection or a qualified result for a stale context, and
-   forbids only silent unqualified passes. Which behavior the verifier
-   chooses is local policy.
-   Classification: clear from normative text (both allowed);
-   non-normative implementation choice (verifier documents its choice and
-   always exposes head sequence and digest).
-
-8. **Receipt verification when pending state is supplied as fixture data.**
-   The spec defines receipt binding against an issuer-side pending store;
-   the verifier-only build substitutes fixture state. The result envelope
-   marks which steps were evaluated from fixtures.
-   Classification: non-normative implementation choice (documented
-   boundary); no spec change required.
-
-9. **Semantic rejection categories required for cross-language
-   comparison.** The governing spec does not define a reason-code taxonomy;
-   the reference's rejection taxonomy is an implementation artifact, not
-   normative. Cross-language comparison needs a stable category set.
-   Classification: needs spec clarification (a normative taxonomy, or an
-   explicit statement that categories are implementation-defined); until
-   then the categories are a documented implementation choice.
-
-10. **Whether current positive vectors are sufficient for every required
-    negative boundary.** The governing spec §13 requires negative coverage
-    (NaN/Infinity, negative zero, duplicate members, lone surrogates, wrong
-    kind, unknown key, one-byte mutation, digest mismatch, expired
-    delegation, stale context); the committed vectors are all positive.
-    Classification: needs additional vector (a negative fixture set is
-    required before the second implementation can prove negative
-    interoperability without consulting the reference).
-
-### Candidate future errata
-
-Listed separately from resolved questions; none is opened in this slice
-because none is a demonstrated contradiction of two normative statements:
-
-- **Rejection taxonomy normativity** — either promote the semantic
-  rejection categories into the spec or state they are implementation-defined
-  (item 9).
-- **Number domain** — pin the accepted integer range in the spec (item 3).
-- **Key-validity boundary semantics** — state inclusive/exclusive behavior
-  at exact `valid_from`/`valid_until` instants (item 6).
+7. **Stale trust context: reject versus qualified pass** — the spec permits
+   either a policy rejection or a qualified result and forbids only silent
+   unqualified passes; the verifier's reject-vs-qualified behavior is a
+   disclosed local-policy choice. Fresh/stale classification itself is fixed
+   by the profile (§5).
+8. **Receipt verification with pending state supplied as fixture data** —
+   the verifier-only build substitutes semantic fixture state; the result
+   envelope marks which steps were evaluated from fixtures.
