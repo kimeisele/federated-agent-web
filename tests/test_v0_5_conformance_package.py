@@ -191,6 +191,7 @@ class TestTrustFreshness:
             assert context.head_digest == content_digest_of(head), rec["id"]
 
     def test_all_fixtures_fresh_under_explicit_pinned_at(self):
+        """Recorded fixtures are strictly fresh under the >= rule."""
         manifest = _load_manifest()
         for rec in manifest["fixtures"]:
             chain = [json.loads((PACKAGE / p).read_text(encoding="utf-8")) for p in rec["trust_chain"]]
@@ -198,7 +199,71 @@ class TestTrustFreshness:
             window_ns = int(head["body"]["manifest_freshness_window_seconds"]) * NS
             pinned = parse_timestamp_ns(rec["pinned_at"])
             now = parse_timestamp_ns(rec["now"])
-            assert pinned + window_ns > now, rec["id"]
+            assert pinned + window_ns >= now, rec["id"]
+
+    def test_freshness_contract_declares_equality_boundary(self):
+        """The machine-readable contract pins the >= rule explicitly."""
+        manifest = _load_manifest()
+        freshness = manifest["defaults"]["trust_chain"]["freshness"]
+        assert ">=" in freshness["fresh"]
+        assert "< now" in freshness["stale"]
+        assert "equality_boundary" in freshness
+        assert "fresh" in freshness["equality_boundary"]
+
+    def test_equality_boundary_classifies_fresh(self):
+        """pinned_at + window == now is fresh; one ns below is stale.
+
+        Explicit regression so a second-language implementation cannot read
+        the boundary differently. All values derive from manifest-recorded
+        data: the fixture's recorded ``now`` and the head manifest's
+        ``manifest_freshness_window_seconds``. The only deviation is the
+        explicitly constructed pinned_at needed to hit the boundary.
+        """
+        manifest = _load_manifest()
+        rec = next(r for r in manifest["fixtures"] if r["id"] == "delegation-source")
+        chain = [json.loads((PACKAGE / p).read_text(encoding="utf-8")) for p in rec["trust_chain"]]
+        window_ns = int(chain[-1]["body"]["manifest_freshness_window_seconds"]) * NS
+        now_ns = parse_timestamp_ns(rec["now"])
+        data = (PACKAGE / rec["bytes"]).read_bytes()
+
+        def run(pinned_ns: int) -> object:
+            context = PinnedManifestTrustContext.from_chain(chain, pinned_at=_dt_from_ns(pinned_ns))
+            return verify(
+                data,
+                expected_kind=rec["expected_kind"],
+                local_node_id=rec.get("local_node_id"),
+                trust_context=context,
+                local_policy=_policy_from_record(rec),
+                now=_dt_from_ns(now_ns),
+                pending_store=None,
+            )
+
+        at_equality = run(now_ns - window_ns)      # pinned_at + window == now
+        assert at_equality.ok, at_equality.reason
+        assert at_equality.freshness == "fresh"
+        assert at_equality.reason_code is None
+
+        below_equality = run(now_ns - window_ns - 1)  # pinned_at + window < now
+        assert below_equality.freshness == "stale"
+        assert below_equality.ok  # qualified result under the recorded policy
+
+        # Under a rejecting stale policy the boundary-below case is a
+        # trust.stale rejection; the equality case stays fresh.
+        rejecting_policy = _policy_from_record(rec)
+        rejecting_policy.reject_stale = True
+        context = PinnedManifestTrustContext.from_chain(chain, pinned_at=_dt_from_ns(now_ns - window_ns - 1))
+        rejected = verify(
+            data,
+            expected_kind=rec["expected_kind"],
+            local_node_id=rec.get("local_node_id"),
+            trust_context=context,
+            local_policy=rejecting_policy,
+            now=_dt_from_ns(now_ns),
+            pending_store=None,
+        )
+        assert rejected.freshness == "stale"
+        assert not rejected.ok
+        assert rejected.reason_code == "trust.stale"
 
 
 class TestFixtureContract:

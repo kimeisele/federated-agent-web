@@ -11,7 +11,12 @@
       "head_sequence": "head.body.manifest_sequence",
       "head_digest": "sha256:<hex> of JCS(head without top-level signature)",
       "pinned_at": "explicit per-fixture verification input (see fixtures[].pinned_at); never chosen implicitly by the consumer",
-      "freshness": "fresh iff pinned_at + head.body.manifest_freshness_window_seconds > now; otherwise stale (local policy may reject or qualify, never silently pass)"
+      "freshness": {
+        "fresh": "pinned_at + head.body.manifest_freshness_window_seconds >= now",
+        "stale": "pinned_at + head.body.manifest_freshness_window_seconds < now",
+        "equality_boundary": "pinned_at + freshness_window == now classifies as fresh (matches the reference: stale iff pinned_at + window < now)",
+        "note": "local policy may reject or qualify a stale context, never silently pass"
+      }
     },
     "local_policy": {
       "contract": "fixtures[].local_policy encodes every admission-policy input required to reproduce verification; consumers construct their policy from these values alone and must not inherit implicit defaults",
@@ -31,8 +36,8 @@
   },
   "files": {
     "README.md": {
-      "sha256": "df3d43e80ca5e0db322c9e40a4af8b3f270f63b331556cc91edee24253b3e5ab",
-      "size_bytes": 2186
+      "sha256": "b3d91840275555d1249cc0d74a997101dbb9686b5afd346db578c7f2d32e4760",
+      "size_bytes": 2372
     },
     "context/executor-manifest.json": {
       "sha256": "9c550b9e4bb350bb1a2a35a3501c33a5cbe07b2179a96ec5ea13139648b1516e",

@@ -25,10 +25,13 @@ verification inputs recorded per fixture.
 The ordered `trust_chain` array supplies the pinned manifests. Head = the
 last manifest; `head_sequence` = `head.body.manifest_sequence`; `head_digest`
 = `sha256:<hex>` of JCS(head without the top-level signature). Freshness is
-`pinned_at` + `head.body.manifest_freshness_window_seconds` > `now` (fresh)
-or stale; `pinned_at` is explicit per fixture and never chosen by the
-consumer. A stale context may be rejected or returned qualified by local
-policy, never silently accepted.
+Freshness rule: `fresh` iff `pinned_at` +
+`head.body.manifest_freshness_window_seconds` >= `now`; `stale` iff `<`
+`now`. The equality boundary (`pinned_at + window == now`) classifies as
+fresh, matching the reference implementation (`stale iff pinned_at +
+window < now`). `pinned_at` is explicit per fixture and never chosen by
+the consumer. A stale context may be rejected or returned qualified by
+local policy, never silently accepted.
 
 ## Local policy (language-neutral)
 
