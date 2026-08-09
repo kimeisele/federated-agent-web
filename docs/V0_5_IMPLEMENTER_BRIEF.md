@@ -10,9 +10,12 @@ content and adds scoping that the specification leaves to the implementer.
 Build a **verifier-focused** second implementation of the FAW v0.2 contract
 from the kit's normative sources alone: the governing specification
 (`docs/federated-agent-web-build-spec-v0.2.md`), the three JSON Schemas
-(`schemas/`), and the golden vectors (`vectors/`). The implementation's job
-is to parse, canonicalize, verify signatures, validate documents, and emit
-machine-readable accept/reject results — not to run a node.
+(`schemas/`), the interoperability profile
+(`docs/FAW_V0_2_INTEROPERABILITY_PROFILE.md`), the language-neutral
+conformance package (`conformance/v0.2/**`), and the golden vectors
+(`vectors/`). The implementation's job is to parse, canonicalize, verify
+signatures, validate documents, and emit machine-readable accept/reject
+results — not to run a node.
 
 ## Normative source priority
 
@@ -23,12 +26,24 @@ Where documents disagree:
 2. `schemas/**` — machine-readable constraints; where a schema and the
    governing prose conflict, the contradiction is an erratum, not a license
    to pick one silently.
-3. `SPEC.md` — a condensed summary; conflicts lose to the governing
+3. `docs/FAW_V0_2_INTEROPERABILITY_PROFILE.md` — normative for v0.5
+   cross-language conformance only; resolves previously unspecified v0.2
+   boundaries (JSON number domain, timestamp instant semantics, UUID
+   opacity, half-open key-validity interval, stale-context classification,
+   the thirteen semantic rejection categories, and the planned
+   negative/positive matrix). It never overrides items 1 or 2.
+4. `SPEC.md` — a condensed summary; conflicts lose to the governing
    specification.
-4. `vectors/**` — conformance fixtures: reproducible data, not normative
-   text. A vector that contradicts the governing specification is an
+5. `conformance/v0.2/**` and `vectors/**` — conformance fixtures:
+   reproducible data, not normative text. The conformance package's
+   `manifest.json` is the machine-readable contract for the N01–N15 /
+   P01–P05 fixtures (per-fixture records, explicit `pinned_at` and the
+   freshness rule `fresh iff pinned_at + freshness_window >= now`, head
+   sequence/digest from the ordered trust chain, language-neutral
+   `local_policy` with no implicit defaults, semantic pending context, byte
+   identity). A fixture that contradicts the governing specification is an
    erratum.
-5. This brief — scoping and implementation guidance, never a source of new
+6. This brief — scoping and implementation guidance, never a source of new
    normative requirements.
 
 ## Required verifier scope
@@ -200,8 +215,9 @@ that fails any step is rejected with a stable reason category.
 
 ## Golden Vector inventory
 
-All files under `vectors/` are conformance fixtures. Reproduction rules are
-given in `vectors/README.md` (part of the kit). The current inventory:
+All files under `vectors/` and `conformance/v0.2/` are conformance
+fixtures. Reproduction rules for `vectors/` are given in
+`vectors/README.md` (part of the kit). The current inventory:
 
 | Directory | Files |
 |---|---|
@@ -214,8 +230,28 @@ given in `vectors/README.md` (part of the kit). The current inventory:
 Reproduction required per vector: canonical bytes (vs `*.canonical.hex`),
 content digests (vs `*-digest` files), artifact digest (over raw bytes),
 public-key `kid` (vs manifest/keypair entries), and Ed25519 signature
-verification. All vectors are positive fixtures; negative boundary coverage
-is an open item (see the ambiguity inventory).
+verification.
+
+## Conformance package (language-neutral fixtures)
+
+The `conformance/v0.2/**` package is the intended negative/positive fixture
+source for cross-language conformance. `conformance/v0.2/manifest.json` is
+the machine-readable contract: every fixture record carries id, expect
+(accept/reject), expected_kind, expected_category (null for accept), bytes,
+sha256, size_bytes, fixed `now`, explicit `pinned_at`, the ordered
+`trust_chain` array (head = last manifest; head sequence/digest derived from
+it), language-neutral `local_policy` (all admission-policy fields, no
+implicit defaults), semantic pending context for receipts (never a Python
+store layout), and for every reject: the exact accepted `source` and
+`mutation`. Freshness is `fresh iff pinned_at + freshness_window >= now`
+(`stale iff < now`; the equality boundary classifies as fresh). The
+package must be consumable from the raw fixtures and its manifest alone,
+without any Python source or test.
+
+Both sanctioned TEST-ONLY key files — `vectors/signatures/keypair.json` and
+`conformance/v0.2/context/test-only-keys.json` — are public reproducibility
+fixtures only: they grant no authority, are never deployment identities,
+and are never production credentials.
 
 ## Required CLI surface
 
