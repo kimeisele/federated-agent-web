@@ -30,11 +30,23 @@ TEST_HEAD = "a" * 40
 # Refreshed-kit provenance pinned after the deterministic build (never
 # invented in advance): manifest files, archive members, archive size, and
 # the two external digests.
-EXPECTED_MANIFEST_FILES = 65
-EXPECTED_ARCHIVE_MEMBERS = 66
-EXPECTED_ARCHIVE_SIZE = 51895
-EXPECTED_MANIFEST_SHA256 = "54fc3c143b7f8a3b6fa5acb27a8c2b18458ddcba25819a40028b4dc51cb5bfe9"
-EXPECTED_ARCHIVE_SHA256 = "8b85eb211cba87308c402d27c404fb76fa13e3102c24eef97446f1413e18ef2e"
+EXPECTED_MANIFEST_FILES = 66
+EXPECTED_ARCHIVE_MEMBERS = 67
+EXPECTED_ARCHIVE_SIZE = 54256
+EXPECTED_MANIFEST_SHA256 = "aa41dc991b3858a1cc401ffcc992e1faeb5a964351b1f9340250c5cdfc272778"
+EXPECTED_ARCHIVE_SHA256 = "7a03a38dc2da4687bf4c9e74e699c9bbf3a43a7950cf1b6df75190a76c227511"
+
+# Frozen interoperability profile bytes (must remain byte-identical).
+FROZEN_PROFILE_SHA256 = "17c6a5585ba1c5f63dff45a1783256a13db19308c488f519adf8a39798f0af48"
+
+# The exact thirteen profile rejection categories, used consistently.
+PROFILE_CATEGORIES = [
+    "parse.invalid_json", "parse.duplicate_member", "parse.invalid_unicode",
+    "canonicalization.number_out_of_domain", "schema.invalid",
+    "document.kind_mismatch", "audience.mismatch", "temporal.invalid",
+    "trust.invalid_chain", "trust.unknown_key", "trust.key_not_valid",
+    "signature.invalid", "binding.mismatch",
+]
 
 # Sanctioned TEST-ONLY public fixture key files (exactly these two).
 TEST_ONLY_KEY_FILES = {
@@ -358,6 +370,152 @@ def test_profile_is_a_required_fixed_kit_file(tmp_path):
     with pytest.raises(BUILDER.KitBuildError) as exc:
         BUILDER.build(tmp_path / "out", root=root)
     assert "FAW_V0_2_INTEROPERABILITY_PROFILE.md" in str(exc.value)
+
+
+def test_interoperability_plan_is_a_required_kit_input(tmp_path):
+    """docs/V0_5_INTEROPERABILITY_PLAN.md is a required kit file."""
+    rel = "docs/V0_5_INTEROPERABILITY_PLAN.md"
+    listed = {e["path"] for e in MANIFEST["files"]}
+    assert rel in listed
+    entry = next(e for e in MANIFEST["files"] if e["path"] == rel)
+    assert entry["classification"] == "non-normative-guidance"
+    content = (ROOT / rel).read_bytes()
+    assert len(content) == entry["size_bytes"]
+    assert hashlib.sha256(content).hexdigest() == entry["sha256"]
+    root = _synthetic_root(tmp_path / "no-plan")
+    (root / rel).unlink()
+    with pytest.raises(BUILDER.KitBuildError) as exc:
+        BUILDER.build(tmp_path / "out", root=root)
+    assert "V0_5_INTEROPERABILITY_PLAN.md" in str(exc.value)
+
+
+def test_frozen_profile_bytes_are_unchanged():
+    """The frozen profile remains byte-identical in this slice."""
+    entry = next(e for e in MANIFEST["files"] if e["path"] == "docs/FAW_V0_2_INTEROPERABILITY_PROFILE.md")
+    assert entry["sha256"] == FROZEN_PROFILE_SHA256
+    assert hashlib.sha256((ROOT / entry["path"]).read_bytes()).hexdigest() == FROZEN_PROFILE_SHA256
+
+
+# ---------------------------------------------------------------------------
+# Stale-guidance consistency (brief / plan / protocol vs settled contract)
+# ---------------------------------------------------------------------------
+
+def _kit_guidance_texts() -> dict[str, str]:
+    """Return brief/plan/protocol with whitespace normalized so line breaks
+    do not break contiguous-phrase checks."""
+    return {
+        "brief": " ".join((ROOT / "docs/V0_5_IMPLEMENTER_BRIEF.md").read_text(encoding="utf-8").split()),
+        "plan": " ".join((ROOT / "docs/V0_5_INTEROPERABILITY_PLAN.md").read_text(encoding="utf-8").split()),
+        "protocol": " ".join((ROOT / "docs/V0_5_CLEAN_ROOM_PROTOCOL.md").read_text(encoding="utf-8").split()),
+    }
+
+
+def test_exact_thirteen_categories_used_consistently():
+    texts = _kit_guidance_texts()
+    for name in ("brief", "plan"):
+        for category in PROFILE_CATEGORIES:
+            assert category in texts[name], f"{name} missing category {category}"
+    assert "thirteen" in texts["protocol"]
+
+
+def test_n01_n15_p01_p05_described_as_committed_input():
+    texts = _kit_guidance_texts()
+    for name in ("brief", "plan", "protocol"):
+        assert "N01" in texts[name] and "N15" in texts[name], name
+        assert "P01" in texts[name] and "P05" in texts[name], name
+        assert "conformance/v0.2" in texts[name], name
+
+
+def test_stale_taxonomy_wording_removed():
+    texts = _kit_guidance_texts()
+    stale_phrases = (
+        "defined by the second implementation",
+        "category set is defined by the second implementation",
+        "committed vectors are currently all positive",
+        "negative fixture set is required",
+        "an additional negative fixture set",
+        "needs additional vector (no committed negative fixture)",
+    )
+    for name in ("brief", "plan"):
+        for phrase in stale_phrases:
+            assert phrase not in texts[name], f"{name} still says: {phrase}"
+
+
+def test_frozen_profile_historical_wording_contextualized():
+    """The profile's historical 'planned/future/not yet created' phrasing is
+    explicitly read as repository-status-at-authoring-time, and
+    conformance/v0.2/** is the committed realization."""
+    texts = _kit_guidance_texts()
+    for name in ("brief", "plan", "protocol"):
+        lowered = texts[name].lower()
+        assert "at the time" in lowered, name
+        assert "not an instruction to create another vector package" in lowered, name
+
+
+def test_layer3_clean_room_independence_explicit():
+    texts = _kit_guidance_texts()
+    prohibition = "MUST NOT import, vendor, clone, inspect, invoke, or depend on the Python reference"
+    assert prohibition in texts["brief"]
+    assert prohibition in texts["plan"]
+    assert "MUST NOT require Python" in texts["brief"]  # conformance-report runs without Python
+    assert "post-build" in texts["plan"]
+    assert "separate reference-side evaluator/operator" in texts["plan"]
+    assert "post-build evidence" in texts["brief"]
+    assert "clearly marked pending" in texts["brief"]
+
+
+def test_adr_citations_are_provenance_only():
+    """Delivered clean-room guidance communicates: ADR references are
+    provenance/history only; no ADR is a required implementation input; no
+    instruction tells the second implementer to fetch an ADR from the
+    reference repository."""
+    texts = _kit_guidance_texts()
+    for name in ("brief", "plan"):
+        lowered = texts[name].lower()
+        assert "provenance/history only" in lowered, name
+        assert "adr access is not required" in lowered, name
+    # The plan states the MUST NOT fetch-or-inspect rule for ADR resolution.
+    assert "must not fetch or inspect the reference repository" in texts["plan"].lower()
+    # The brief forbids fetching the ADR or the reference repository.
+    assert "must not fetch the adr or the reference repository" in texts["brief"].lower()
+    # Frozen-material ADR identifiers (e.g. the profile's ADR 0003 reference)
+    # are covered by the provenance-only rule in the brief.
+    assert "adr 0003" in texts["brief"].lower()
+    # No imperative instruction tells the implementer to fetch/retrieve an
+    # ADR (the only 'fetch the adr' occurrences are inside MUST NOT
+    # prohibitions, asserted above).
+    forbidden = (
+        "fetch adr 0002", "fetch adr 0003",
+        "download the adr", "retrieve the adr", "look up adr",
+        "you must fetch", "please fetch the adr",
+    )
+    for name, text in texts.items():
+        lowered = text.lower()
+        for phrase in forbidden:
+            assert phrase not in lowered, f"{name} instructs: {phrase}"
+
+
+def test_no_instruction_to_access_or_execute_python_reference():
+    """No delivered clean-room guidance tells the second implementation to
+    access or execute the Python reference repository; the prohibition is
+    stated in the negative, never as an instruction."""
+    texts = _kit_guidance_texts()
+    forbidden = (
+        "run the Python reference",
+        "run the reference implementation",
+        "import federated_agent_web",
+        "clone the reference repository",
+        "run the FAW reference",
+        "execute the reference implementation",
+        "the Go implementation must run the Python",
+    )
+    for name, text in texts.items():
+        for phrase in forbidden:
+            assert phrase not in text, f"{name} instructs: {phrase}"
+    # The prohibition is explicit in the negative (brief and protocol).
+    for name in ("brief", "protocol"):
+        assert "no delivered clean-room instruction directs the second implementation to access or execute the python reference repository" in texts[name].lower(), name
+    assert "never runs or reads the python reference" in texts["plan"].lower()
 
 
 # ---------------------------------------------------------------------------
