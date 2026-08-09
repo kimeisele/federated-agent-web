@@ -1,9 +1,12 @@
 """Package-validation test for the language-neutral conformance package.
 
 Validates ``conformance/v0.2/`` entirely from ``manifest.json`` and the raw
-fixture bytes: byte identity, matrix completeness, category mapping, and the
-accept/reject contract, executed through the public verification interface.
-The package itself does not depend on Python sources or tests.
+fixture bytes: byte identity, matrix completeness, category mapping, the
+accept/reject contract, explicit trust freshness (``pinned_at``), explicit
+language-neutral local policy (no implicit Python defaults), and tightened
+mutation provenance (every reject ``source`` is a recorded, verified-accept
+fixture). Executed through the public verification interface; the package
+itself does not depend on Python sources or tests.
 """
 
 from __future__ import annotations
@@ -16,7 +19,7 @@ from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from federated_agent_web.documents import parse_timestamp_ns
+from federated_agent_web.documents import content_digest_of, parse_timestamp_ns
 from federated_agent_web.pending import PendingDelegationStore
 from federated_agent_web.verify import PinnedManifestTrustContext, VerificationPolicy, verify
 
@@ -47,6 +50,22 @@ EXPECTED_MATRIX: dict[str, str | None] = {
     "P05": None,
 }
 
+SUPPORT_IDS = ("delegation-source", "receipt-source", "manifest-source", "rotation-successor-source")
+
+# Every field the record must encode so the consumer builds policy with no
+# implicit defaults.
+POLICY_FIELDS = (
+    "clock_skew_seconds",
+    "reject_stale",
+    "can_enforce_tokens",
+    "can_enforce_cost",
+    "allowed_external_effects",
+    "allowed_actions",
+    "capability_targets",
+    "max_wall_seconds_cap",
+    "max_output_bytes_cap",
+)
+
 
 def _load_manifest() -> dict:
     return json.loads((PACKAGE / "manifest.json").read_text(encoding="utf-8"))
@@ -57,10 +76,28 @@ def _dt_from_ns(value_ns: int) -> datetime:
     return datetime(1970, 1, 1, tzinfo=timezone.utc) + timedelta(seconds=seconds, microseconds=nanos // 1000)
 
 
+def _policy_from_record(rec: dict) -> VerificationPolicy:
+    """Construct policy entirely from manifest data; no implicit defaults."""
+    policy = rec["local_policy"]
+    missing = [f for f in POLICY_FIELDS if f not in policy]
+    assert not missing, f"{rec['id']} local_policy missing {missing}"
+    return VerificationPolicy(
+        clock_skew_seconds=int(policy["clock_skew_seconds"]),
+        reject_stale=bool(policy["reject_stale"]),
+        can_enforce_tokens=bool(policy["can_enforce_tokens"]),
+        can_enforce_cost=bool(policy["can_enforce_cost"]),
+        allowed_external_effects=frozenset(policy["allowed_external_effects"]),
+        allowed_actions=set(policy["allowed_actions"]) if policy["allowed_actions"] is not None else None,
+        capability_targets=dict(policy["capability_targets"]),
+        max_wall_seconds_cap=policy["max_wall_seconds_cap"],
+        max_output_bytes_cap=policy["max_output_bytes_cap"],
+    )
+
+
 def _verify_fixture(rec: dict) -> object:
     data = (PACKAGE / rec["bytes"]).read_bytes()
     chain = [json.loads((PACKAGE / p).read_text(encoding="utf-8")) for p in rec["trust_chain"]]
-    context = PinnedManifestTrustContext.from_chain(chain, pinned_at=_dt_from_ns(parse_timestamp_ns(rec["now"])))
+    context = PinnedManifestTrustContext.from_chain(chain, pinned_at=_dt_from_ns(parse_timestamp_ns(rec["pinned_at"])))
     pending = None
     if rec.get("pending"):
         delegation = json.loads((PACKAGE / rec["pending"]["delegation_source"]).read_text(encoding="utf-8"))
@@ -72,10 +109,7 @@ def _verify_fixture(rec: dict) -> object:
         expected_kind=rec["expected_kind"],
         local_node_id=rec.get("local_node_id"),
         trust_context=context,
-        local_policy=VerificationPolicy(
-            clock_skew_seconds=rec["local_policy"]["clock_skew_seconds"],
-            reject_stale=rec["local_policy"]["reject_stale"],
-        ),
+        local_policy=_policy_from_record(rec),
         now=_dt_from_ns(parse_timestamp_ns(rec["now"])),
         pending_store=pending,
     )
@@ -104,6 +138,8 @@ class TestPackageByteIdentity:
             refs = [rec["bytes"], *rec["trust_chain"]]
             if rec.get("pending"):
                 refs.append(rec["pending"]["delegation_source"])
+            if rec.get("source"):
+                refs.append(rec["source"])
             for ref in refs:
                 assert str(pathlib.PurePosixPath(ref)).startswith(("context/", "positive/", "negative/", "source/")), ref
         for rel, data in ((rel, (PACKAGE / rel).read_bytes()) for rel in manifest["files"]):
@@ -131,12 +167,42 @@ class TestMatrixCompleteness:
     def test_support_fixtures_expected_accepted(self):
         manifest = _load_manifest()
         by_id = {rec["id"]: rec for rec in manifest["fixtures"]}
-        for support_id in ("delegation-source", "receipt-source", "manifest-source"):
+        for support_id in SUPPORT_IDS:
             assert by_id[support_id]["expect"] == "accept", support_id
 
 
+class TestTrustFreshness:
+    def test_pinned_at_explicit_per_fixture(self):
+        manifest = _load_manifest()
+        for rec in manifest["fixtures"]:
+            assert "pinned_at" in rec, rec["id"]
+            parse_timestamp_ns(rec["pinned_at"])  # must parse as a FAW timestamp
+
+    def test_head_sequence_and_digest_derived_from_chain(self):
+        """Head = last trust_chain manifest; sequence/digest per the contract."""
+        manifest = _load_manifest()
+        for rec in manifest["fixtures"]:
+            chain = [json.loads((PACKAGE / p).read_text(encoding="utf-8")) for p in rec["trust_chain"]]
+            head = chain[-1]
+            context = PinnedManifestTrustContext.from_chain(
+                chain, pinned_at=_dt_from_ns(parse_timestamp_ns(rec["pinned_at"]))
+            )
+            assert context.head_sequence == int(head["body"]["manifest_sequence"]), rec["id"]
+            assert context.head_digest == content_digest_of(head), rec["id"]
+
+    def test_all_fixtures_fresh_under_explicit_pinned_at(self):
+        manifest = _load_manifest()
+        for rec in manifest["fixtures"]:
+            chain = [json.loads((PACKAGE / p).read_text(encoding="utf-8")) for p in rec["trust_chain"]]
+            head = chain[-1]
+            window_ns = int(head["body"]["manifest_freshness_window_seconds"]) * NS
+            pinned = parse_timestamp_ns(rec["pinned_at"])
+            now = parse_timestamp_ns(rec["now"])
+            assert pinned + window_ns > now, rec["id"]
+
+
 class TestFixtureContract:
-    @pytest.mark.parametrize("case_id", list(EXPECTED_MATRIX) + ["delegation-source", "receipt-source", "manifest-source"])
+    @pytest.mark.parametrize("case_id", list(EXPECTED_MATRIX) + list(SUPPORT_IDS))
     def test_verification_matches_contract(self, case_id):
         manifest = _load_manifest()
         rec = next(r for r in manifest["fixtures"] if r["id"] == case_id)
@@ -150,12 +216,23 @@ class TestFixtureContract:
                 f"{case_id}: expected {rec['expected_category']}, got {result.reason_code}"
             )
 
-    def test_mutation_fixtures_carry_source_and_mutation(self):
+    def test_reject_sources_resolve_to_accepted_fixtures(self):
+        """Every reject source is a recorded fixture that itself verifies accept."""
         manifest = _load_manifest()
+        by_bytes = {rec["bytes"]: rec for rec in manifest["fixtures"]}
+        verified_accept: set[str] = set()
         for rec in manifest["fixtures"]:
-            if rec["expect"] == "reject":
-                assert rec["source"], rec["id"]
-                assert rec["mutation"], rec["id"]
+            if rec["expect"] == "accept":
+                assert _verify_fixture(rec).ok, rec["id"]
+                verified_accept.add(rec["id"])
+        for rec in manifest["fixtures"]:
+            if rec["expect"] != "reject":
+                continue
+            assert rec["source"], rec["id"]
+            source_rec = by_bytes.get(rec["source"])
+            assert source_rec is not None, f"{rec['id']} source {rec['source']} is not a recorded fixture"
+            assert source_rec["expect"] == "accept", f"{rec['id']} source {rec['source']} not expected accept"
+            assert source_rec["id"] in verified_accept, f"{rec['id']} source {rec['source']} did not verify accept"
 
 
 class TestRecordShape:
@@ -163,12 +240,24 @@ class TestRecordShape:
         manifest = _load_manifest()
         assert manifest["faw_spec_version"] == "0.2"
         assert manifest["defaults"]["now"]
+        assert manifest["defaults"]["trust_chain"]["freshness"]
         for rec in manifest["fixtures"]:
             for key in ("id", "expect", "expected_kind", "expected_category", "bytes", "sha256", "size_bytes",
-                        "now", "trust_chain", "local_policy", "source", "mutation"):
+                        "now", "pinned_at", "trust_chain", "local_policy", "source", "mutation"):
                 assert key in rec, f"{rec['id']} missing {key}"
             assert isinstance(rec["trust_chain"], list) and rec["trust_chain"], rec["id"]
-            assert rec["local_policy"]["clock_skew_seconds"] >= 0, rec["id"]
+            missing = [f for f in POLICY_FIELDS if f not in rec["local_policy"]]
+            assert not missing, f"{rec['id']} local_policy missing {missing}"
             if rec.get("pending"):
                 for key in ("task_id", "attempt_id", "delegation_digest", "executor_node_id", "status"):
                     assert key in rec["pending"], f"{rec['id']} pending missing {key}"
+
+    def test_verification_input_mutations_are_exact(self):
+        manifest = _load_manifest()
+        by_id = {rec["id"]: rec for rec in manifest["fixtures"]}
+        n08 = by_id["N08"]
+        assert "expected_kind" in n08["mutation"] and "faw-receipt" in n08["mutation"]
+        assert n08["source"] == "source/delegation-source.json"
+        n09 = by_id["N09"]
+        assert "local_node_id" in n09["mutation"] and "urn:faw:conformance-other-node-0001" in n09["mutation"]
+        assert n09["source"] == "source/delegation-source.json"

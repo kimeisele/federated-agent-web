@@ -6,16 +6,33 @@
   "package": "conformance/v0.2",
   "defaults": {
     "now": "2026-01-01T00:00:00Z",
-    "local_policy": {
-      "clock_skew_seconds": 60,
-      "reject_stale": false
+    "trust_chain": {
+      "head": "the last manifest of the ordered trust_chain array",
+      "head_sequence": "head.body.manifest_sequence",
+      "head_digest": "sha256:<hex> of JCS(head without top-level signature)",
+      "pinned_at": "explicit per-fixture verification input (see fixtures[].pinned_at); never chosen implicitly by the consumer",
+      "freshness": "fresh iff pinned_at + head.body.manifest_freshness_window_seconds > now; otherwise stale (local policy may reject or qualify, never silently pass)"
     },
-    "verification": "document bytes + expected_kind + trust_chain (ordered manifest array) + now + local_node_id (delegations) + optional semantic pending context (receipts)"
+    "local_policy": {
+      "contract": "fixtures[].local_policy encodes every admission-policy input required to reproduce verification; consumers construct their policy from these values alone and must not inherit implicit defaults",
+      "fields": [
+        "clock_skew_seconds",
+        "reject_stale",
+        "can_enforce_tokens",
+        "can_enforce_cost",
+        "allowed_external_effects",
+        "allowed_actions",
+        "capability_targets",
+        "max_wall_seconds_cap",
+        "max_output_bytes_cap"
+      ]
+    },
+    "verification": "document bytes + expected_kind + trust_chain (ordered manifest array) + now + pinned_at + local_node_id (delegations) + local_policy + optional semantic pending context (receipts)"
   },
   "files": {
     "README.md": {
-      "sha256": "7cdd5c4ddf95041c41716e98b21b520181d9c43e7ab2f1efbf0320ca8a7a362c",
-      "size_bytes": 1238
+      "sha256": "df3d43e80ca5e0db322c9e40a4af8b3f270f63b331556cc91edee24253b3e5ab",
+      "size_bytes": 2186
     },
     "context/executor-manifest.json": {
       "sha256": "9c550b9e4bb350bb1a2a35a3501c33a5cbe07b2179a96ec5ea13139648b1516e",
@@ -140,6 +157,10 @@
     "source/receipt-source.json": {
       "sha256": "434a33c4e6416726ebed5b1f2e287be57eeb27aa4c5303fb44822884589cf4d3",
       "size_bytes": 1242
+    },
+    "source/rotation-successor-source.json": {
+      "sha256": "9215500b173445f465d2ca2822059931276a38d08d85c3481632a6efff863028",
+      "size_bytes": 1620
     }
   },
   "fixtures": [
@@ -152,13 +173,23 @@
       "sha256": "4ea7fc1c1a503856d43bcdb22f18063739354d7fbccd8ea533a9f829cb1108da",
       "size_bytes": 1402,
       "now": "2026-01-01T00:00:00Z",
+      "pinned_at": "2026-01-01T00:00:00Z",
       "trust_chain": [
         "context/issuer-manifest.json"
       ],
       "local_node_id": "urn:faw:conformance-executor-0001",
       "local_policy": {
         "clock_skew_seconds": 60,
-        "reject_stale": false
+        "reject_stale": false,
+        "can_enforce_tokens": true,
+        "can_enforce_cost": false,
+        "allowed_external_effects": [
+          "none"
+        ],
+        "allowed_actions": null,
+        "capability_targets": {},
+        "max_wall_seconds_cap": null,
+        "max_output_bytes_cap": null
       },
       "pending": null,
       "source": null,
@@ -173,13 +204,23 @@
       "sha256": "c90a45eec9bced314512cb08210c6726ecd8030cada8977accb9068e33cb9b31",
       "size_bytes": 1403,
       "now": "2026-01-01T00:00:00Z",
+      "pinned_at": "2026-01-01T00:00:00Z",
       "trust_chain": [
         "context/issuer-manifest.json"
       ],
       "local_node_id": "urn:faw:conformance-executor-0001",
       "local_policy": {
         "clock_skew_seconds": 60,
-        "reject_stale": false
+        "reject_stale": false,
+        "can_enforce_tokens": true,
+        "can_enforce_cost": false,
+        "allowed_external_effects": [
+          "none"
+        ],
+        "allowed_actions": null,
+        "capability_targets": {},
+        "max_wall_seconds_cap": null,
+        "max_output_bytes_cap": null
       },
       "pending": null,
       "source": null,
@@ -194,13 +235,23 @@
       "sha256": "c39329a0a47a3762832d1c094777f6c8a251e0f381ed7f3a9c3993dca602b849",
       "size_bytes": 1254,
       "now": "2026-01-01T00:00:00Z",
+      "pinned_at": "2026-01-01T00:00:00Z",
       "trust_chain": [
         "context/executor-manifest.json"
       ],
       "local_node_id": null,
       "local_policy": {
         "clock_skew_seconds": 60,
-        "reject_stale": false
+        "reject_stale": false,
+        "can_enforce_tokens": true,
+        "can_enforce_cost": false,
+        "allowed_external_effects": [
+          "none"
+        ],
+        "allowed_actions": null,
+        "capability_targets": {},
+        "max_wall_seconds_cap": null,
+        "max_output_bytes_cap": null
       },
       "pending": {
         "task_id": "40000000-0000-4000-8000-000000000001",
@@ -222,13 +273,23 @@
       "sha256": "c9d9ce4ed9940ebabf8afe16166668d87e391befec409670c32bc8e2ef9a36ee",
       "size_bytes": 1397,
       "now": "2026-01-01T00:00:00Z",
+      "pinned_at": "2026-01-01T00:00:00Z",
       "trust_chain": [
         "context/key-boundary-manifest.json"
       ],
       "local_node_id": "urn:faw:conformance-executor-0001",
       "local_policy": {
         "clock_skew_seconds": 60,
-        "reject_stale": false
+        "reject_stale": false,
+        "can_enforce_tokens": true,
+        "can_enforce_cost": false,
+        "allowed_external_effects": [
+          "none"
+        ],
+        "allowed_actions": null,
+        "capability_targets": {},
+        "max_wall_seconds_cap": null,
+        "max_output_bytes_cap": null
       },
       "pending": null,
       "source": null,
@@ -243,13 +304,23 @@
       "sha256": "e8a812db438419246213bc08d7494c760e754da7f46e30f838b9236996b2a8d3",
       "size_bytes": 1393,
       "now": "2026-01-01T00:00:00Z",
+      "pinned_at": "2026-01-01T00:00:00Z",
       "trust_chain": [
         "context/issuer-manifest.json"
       ],
       "local_node_id": "urn:faw:conformance-executor-0001",
       "local_policy": {
         "clock_skew_seconds": 60,
-        "reject_stale": false
+        "reject_stale": false,
+        "can_enforce_tokens": true,
+        "can_enforce_cost": false,
+        "allowed_external_effects": [
+          "none"
+        ],
+        "allowed_actions": null,
+        "capability_targets": {},
+        "max_wall_seconds_cap": null,
+        "max_output_bytes_cap": null
       },
       "pending": null,
       "source": null,
@@ -264,13 +335,23 @@
       "sha256": "d188b88be0612d28cc752af3d94bec8ad34dd023a76a28930d69cdbbc393f76f",
       "size_bytes": 1398,
       "now": "2026-01-01T00:00:00Z",
+      "pinned_at": "2026-01-01T00:00:00Z",
       "trust_chain": [
         "context/issuer-manifest.json"
       ],
       "local_node_id": "urn:faw:conformance-executor-0001",
       "local_policy": {
         "clock_skew_seconds": 60,
-        "reject_stale": false
+        "reject_stale": false,
+        "can_enforce_tokens": true,
+        "can_enforce_cost": false,
+        "allowed_external_effects": [
+          "none"
+        ],
+        "allowed_actions": null,
+        "capability_targets": {},
+        "max_wall_seconds_cap": null,
+        "max_output_bytes_cap": null
       },
       "pending": null,
       "source": null,
@@ -285,13 +366,23 @@
       "sha256": "434a33c4e6416726ebed5b1f2e287be57eeb27aa4c5303fb44822884589cf4d3",
       "size_bytes": 1242,
       "now": "2026-01-01T00:00:00Z",
+      "pinned_at": "2026-01-01T00:00:00Z",
       "trust_chain": [
         "context/executor-manifest.json"
       ],
       "local_node_id": null,
       "local_policy": {
         "clock_skew_seconds": 60,
-        "reject_stale": false
+        "reject_stale": false,
+        "can_enforce_tokens": true,
+        "can_enforce_cost": false,
+        "allowed_external_effects": [
+          "none"
+        ],
+        "allowed_actions": null,
+        "capability_targets": {},
+        "max_wall_seconds_cap": null,
+        "max_output_bytes_cap": null
       },
       "pending": {
         "task_id": "40000000-0000-4000-8000-000000000001",
@@ -313,17 +404,59 @@
       "sha256": "af106aa7b86463b57567640ad3029275033c23dc6e46a9ed336106398b0b43ca",
       "size_bytes": 1224,
       "now": "2026-01-01T00:00:00Z",
+      "pinned_at": "2026-01-01T00:00:00Z",
       "trust_chain": [
         "source/manifest-source.json"
       ],
       "local_node_id": null,
       "local_policy": {
         "clock_skew_seconds": 60,
-        "reject_stale": false
+        "reject_stale": false,
+        "can_enforce_tokens": true,
+        "can_enforce_cost": false,
+        "allowed_external_effects": [
+          "none"
+        ],
+        "allowed_actions": null,
+        "capability_targets": {},
+        "max_wall_seconds_cap": null,
+        "max_output_bytes_cap": null
       },
       "pending": null,
       "source": null,
       "mutation": "none (accepted support fixture)"
+    },
+    {
+      "id": "rotation-successor-source",
+      "expect": "accept",
+      "expected_kind": "faw-node-manifest",
+      "expected_category": null,
+      "bytes": "source/rotation-successor-source.json",
+      "sha256": "9215500b173445f465d2ca2822059931276a38d08d85c3481632a6efff863028",
+      "size_bytes": 1620,
+      "now": "2026-01-01T00:00:00Z",
+      "pinned_at": "2026-01-01T00:00:00Z",
+      "trust_chain": [
+        "context/rotation-genesis.json",
+        "source/rotation-successor-source.json"
+      ],
+      "local_node_id": null,
+      "local_policy": {
+        "clock_skew_seconds": 60,
+        "reject_stale": false,
+        "can_enforce_tokens": true,
+        "can_enforce_cost": false,
+        "allowed_external_effects": [
+          "none"
+        ],
+        "allowed_actions": null,
+        "capability_targets": {},
+        "max_wall_seconds_cap": null,
+        "max_output_bytes_cap": null
+      },
+      "pending": null,
+      "source": null,
+      "mutation": "none (accepted rotation successor support fixture)"
     },
     {
       "id": "N01",
@@ -334,13 +467,23 @@
       "sha256": "1000ee2f91ce33b78f0eaa8d576d3647c45cb53fe091b5e6bcfc801c7eda7625",
       "size_bytes": 1423,
       "now": "2026-01-01T00:00:00Z",
+      "pinned_at": "2026-01-01T00:00:00Z",
       "trust_chain": [
         "context/issuer-manifest.json"
       ],
       "local_node_id": "urn:faw:conformance-executor-0001",
       "local_policy": {
         "clock_skew_seconds": 60,
-        "reject_stale": false
+        "reject_stale": false,
+        "can_enforce_tokens": true,
+        "can_enforce_cost": false,
+        "allowed_external_effects": [
+          "none"
+        ],
+        "allowed_actions": null,
+        "capability_targets": {},
+        "max_wall_seconds_cap": null,
+        "max_output_bytes_cap": null
       },
       "pending": null,
       "source": "source/delegation-source.json",
@@ -355,13 +498,23 @@
       "sha256": "ea9d53791e1bd57dda732b32862611b9de25cc9506191ffd7be3c6fbe8ec0420",
       "size_bytes": 699,
       "now": "2026-01-01T00:00:00Z",
+      "pinned_at": "2026-01-01T00:00:00Z",
       "trust_chain": [
         "context/issuer-manifest.json"
       ],
       "local_node_id": "urn:faw:conformance-executor-0001",
       "local_policy": {
         "clock_skew_seconds": 60,
-        "reject_stale": false
+        "reject_stale": false,
+        "can_enforce_tokens": true,
+        "can_enforce_cost": false,
+        "allowed_external_effects": [
+          "none"
+        ],
+        "allowed_actions": null,
+        "capability_targets": {},
+        "max_wall_seconds_cap": null,
+        "max_output_bytes_cap": null
       },
       "pending": null,
       "source": "source/delegation-source.json",
@@ -376,13 +529,23 @@
       "sha256": "9330bc8235f40984aa62ba9972c665089a3c0eca32c57b6a2e39cb7372a3ca67",
       "size_bytes": 1398,
       "now": "2026-01-01T00:00:00Z",
+      "pinned_at": "2026-01-01T00:00:00Z",
       "trust_chain": [
         "context/issuer-manifest.json"
       ],
       "local_node_id": "urn:faw:conformance-executor-0001",
       "local_policy": {
         "clock_skew_seconds": 60,
-        "reject_stale": false
+        "reject_stale": false,
+        "can_enforce_tokens": true,
+        "can_enforce_cost": false,
+        "allowed_external_effects": [
+          "none"
+        ],
+        "allowed_actions": null,
+        "capability_targets": {},
+        "max_wall_seconds_cap": null,
+        "max_output_bytes_cap": null
       },
       "pending": null,
       "source": "source/delegation-source.json",
@@ -397,13 +560,23 @@
       "sha256": "e3e2b6ebb5b6451651f30724d1708a543389c28275a4ce2a9775f4ab192f97de",
       "size_bytes": 1393,
       "now": "2026-01-01T00:00:00Z",
+      "pinned_at": "2026-01-01T00:00:00Z",
       "trust_chain": [
         "context/issuer-manifest.json"
       ],
       "local_node_id": "urn:faw:conformance-executor-0001",
       "local_policy": {
         "clock_skew_seconds": 60,
-        "reject_stale": false
+        "reject_stale": false,
+        "can_enforce_tokens": true,
+        "can_enforce_cost": false,
+        "allowed_external_effects": [
+          "none"
+        ],
+        "allowed_actions": null,
+        "capability_targets": {},
+        "max_wall_seconds_cap": null,
+        "max_output_bytes_cap": null
       },
       "pending": null,
       "source": "source/delegation-source.json",
@@ -418,13 +591,23 @@
       "sha256": "1064c2cd2212f3e1ed1f626ddf8eca1d0048ad901fe671b29eff9bfd94bf6a2b",
       "size_bytes": 1402,
       "now": "2026-01-01T00:00:00Z",
+      "pinned_at": "2026-01-01T00:00:00Z",
       "trust_chain": [
         "context/issuer-manifest.json"
       ],
       "local_node_id": "urn:faw:conformance-executor-0001",
       "local_policy": {
         "clock_skew_seconds": 60,
-        "reject_stale": false
+        "reject_stale": false,
+        "can_enforce_tokens": true,
+        "can_enforce_cost": false,
+        "allowed_external_effects": [
+          "none"
+        ],
+        "allowed_actions": null,
+        "capability_targets": {},
+        "max_wall_seconds_cap": null,
+        "max_output_bytes_cap": null
       },
       "pending": null,
       "source": "positive/P01-number-max.json",
@@ -439,13 +622,23 @@
       "sha256": "1e194f1959c4065c61f25cd7ccb1016b00f4e52989b8d9d473c255423109641a",
       "size_bytes": 1403,
       "now": "2026-01-01T00:00:00Z",
+      "pinned_at": "2026-01-01T00:00:00Z",
       "trust_chain": [
         "context/issuer-manifest.json"
       ],
       "local_node_id": "urn:faw:conformance-executor-0001",
       "local_policy": {
         "clock_skew_seconds": 60,
-        "reject_stale": false
+        "reject_stale": false,
+        "can_enforce_tokens": true,
+        "can_enforce_cost": false,
+        "allowed_external_effects": [
+          "none"
+        ],
+        "allowed_actions": null,
+        "capability_targets": {},
+        "max_wall_seconds_cap": null,
+        "max_output_bytes_cap": null
       },
       "pending": null,
       "source": "positive/P02-number-min.json",
@@ -460,13 +653,23 @@
       "sha256": "1fcedd8d5c6ae939178a922613d866235b4a1dc02ba2d4bfc79de3240acdec2e",
       "size_bytes": 1423,
       "now": "2026-01-01T00:00:00Z",
+      "pinned_at": "2026-01-01T00:00:00Z",
       "trust_chain": [
         "context/issuer-manifest.json"
       ],
       "local_node_id": "urn:faw:conformance-executor-0001",
       "local_policy": {
         "clock_skew_seconds": 60,
-        "reject_stale": false
+        "reject_stale": false,
+        "can_enforce_tokens": true,
+        "can_enforce_cost": false,
+        "allowed_external_effects": [
+          "none"
+        ],
+        "allowed_actions": null,
+        "capability_targets": {},
+        "max_wall_seconds_cap": null,
+        "max_output_bytes_cap": null
       },
       "pending": null,
       "source": "source/delegation-source.json",
@@ -481,21 +684,30 @@
       "sha256": "d188b88be0612d28cc752af3d94bec8ad34dd023a76a28930d69cdbbc393f76f",
       "size_bytes": 1398,
       "now": "2026-01-01T00:00:00Z",
+      "pinned_at": "2026-01-01T00:00:00Z",
       "trust_chain": [
         "context/issuer-manifest.json"
       ],
       "local_node_id": "urn:faw:conformance-executor-0001",
       "local_policy": {
         "clock_skew_seconds": 60,
-        "reject_stale": false
+        "reject_stale": false,
+        "can_enforce_tokens": true,
+        "can_enforce_cost": false,
+        "allowed_external_effects": [
+          "none"
+        ],
+        "allowed_actions": null,
+        "capability_targets": {},
+        "max_wall_seconds_cap": null,
+        "max_output_bytes_cap": null
       },
       "pending": null,
       "source": "source/delegation-source.json",
-      "mutation": "none",
+      "mutation": "verification-input: expected_kind parameter set to 'faw-receipt' (document bytes unchanged from the accepted source)",
       "params": {
         "expected_kind": "faw-receipt"
-      },
-      "note": "verification parameter expected_kind=faw-receipt applied to an unchanged faw-delegation document"
+      }
     },
     {
       "id": "N09",
@@ -506,21 +718,30 @@
       "sha256": "d188b88be0612d28cc752af3d94bec8ad34dd023a76a28930d69cdbbc393f76f",
       "size_bytes": 1398,
       "now": "2026-01-01T00:00:00Z",
+      "pinned_at": "2026-01-01T00:00:00Z",
       "trust_chain": [
         "context/issuer-manifest.json"
       ],
       "local_node_id": "urn:faw:conformance-other-node-0001",
       "local_policy": {
         "clock_skew_seconds": 60,
-        "reject_stale": false
+        "reject_stale": false,
+        "can_enforce_tokens": true,
+        "can_enforce_cost": false,
+        "allowed_external_effects": [
+          "none"
+        ],
+        "allowed_actions": null,
+        "capability_targets": {},
+        "max_wall_seconds_cap": null,
+        "max_output_bytes_cap": null
       },
       "pending": null,
       "source": "source/delegation-source.json",
-      "mutation": "none",
+      "mutation": "verification-input: local_node_id parameter set to 'urn:faw:conformance-other-node-0001' (document bytes unchanged from the accepted source)",
       "params": {
         "local_node_id": "urn:faw:conformance-other-node-0001"
-      },
-      "note": "verification parameter local_node_id set to a node other than the delegation target"
+      }
     },
     {
       "id": "N10",
@@ -531,13 +752,23 @@
       "sha256": "899de4dcc91369fa3a3536fe2b66cc77e16db4f626a7691c8b182ffb5e01496f",
       "size_bytes": 1394,
       "now": "2026-01-01T00:02:00Z",
+      "pinned_at": "2026-01-01T00:02:00Z",
       "trust_chain": [
         "context/issuer-manifest.json"
       ],
       "local_node_id": "urn:faw:conformance-executor-0001",
       "local_policy": {
         "clock_skew_seconds": 60,
-        "reject_stale": false
+        "reject_stale": false,
+        "can_enforce_tokens": true,
+        "can_enforce_cost": false,
+        "allowed_external_effects": [
+          "none"
+        ],
+        "allowed_actions": null,
+        "capability_targets": {},
+        "max_wall_seconds_cap": null,
+        "max_output_bytes_cap": null
       },
       "pending": null,
       "source": "source/delegation-source.json",
@@ -555,17 +786,27 @@
       "sha256": "760d5d312499055c745f5e4db2ff8830fa45ee596b55451aed96877f2046c086",
       "size_bytes": 1405,
       "now": "2026-01-02T00:00:00Z",
+      "pinned_at": "2026-01-02T00:00:00Z",
       "trust_chain": [
         "context/key-boundary-manifest.json"
       ],
       "local_node_id": "urn:faw:conformance-executor-0001",
       "local_policy": {
         "clock_skew_seconds": 60,
-        "reject_stale": false
+        "reject_stale": false,
+        "can_enforce_tokens": true,
+        "can_enforce_cost": false,
+        "allowed_external_effects": [
+          "none"
+        ],
+        "allowed_actions": null,
+        "capability_targets": {},
+        "max_wall_seconds_cap": null,
+        "max_output_bytes_cap": null
       },
       "pending": null,
-      "source": "context/key-boundary-manifest.json",
-      "mutation": "re_signed: delegation rebuilt with issued_at == key valid_until (2026-01-02T00:00:00Z)",
+      "source": "positive/P04-issued-at-valid-from.json",
+      "mutation": "re_signed: delegation rebuilt with issued_at == key valid_until (2026-01-02T00:00:00Z); accepted counterpart P04 uses the same boundary key at valid_from",
       "params": {
         "now": "2026-01-02T00:00:00Z"
       }
@@ -579,17 +820,27 @@
       "sha256": "11cfaa76aa29e19cbca4420e947e8d93106361621f56a072633d9e92b8ff2ef6",
       "size_bytes": 1394,
       "now": "2026-01-01T00:00:00Z",
+      "pinned_at": "2026-01-01T00:00:00Z",
       "trust_chain": [
         "context/issuer-manifest.json"
       ],
       "local_node_id": "urn:faw:conformance-executor-0001",
       "local_policy": {
         "clock_skew_seconds": 60,
-        "reject_stale": false
+        "reject_stale": false,
+        "can_enforce_tokens": true,
+        "can_enforce_cost": false,
+        "allowed_external_effects": [
+          "none"
+        ],
+        "allowed_actions": null,
+        "capability_targets": {},
+        "max_wall_seconds_cap": null,
+        "max_output_bytes_cap": null
       },
       "pending": null,
-      "source": "context/test-only-keys.json",
-      "mutation": "re_signed: delegation signed with foreign TEST-ONLY key not present in the trust chain",
+      "source": "source/delegation-source.json",
+      "mutation": "re_signed: delegation rebuilt signed with a foreign TEST-ONLY key whose kid is not present in the trust chain (accepted counterpart delegation-source uses the issuer key)",
       "params": {
         "now": "2026-01-01T00:00:00Z"
       }
@@ -603,6 +854,7 @@
       "sha256": "7734abe017ec5ec6ad553394e45aa8d51b44cab7c6f98cff2af947a08752accb",
       "size_bytes": 1620,
       "now": "2026-01-01T00:00:00Z",
+      "pinned_at": "2026-01-01T00:00:00Z",
       "trust_chain": [
         "context/rotation-genesis.json",
         "negative/N13-broken-chain-link.json"
@@ -610,11 +862,20 @@
       "local_node_id": null,
       "local_policy": {
         "clock_skew_seconds": 60,
-        "reject_stale": false
+        "reject_stale": false,
+        "can_enforce_tokens": true,
+        "can_enforce_cost": false,
+        "allowed_external_effects": [
+          "none"
+        ],
+        "allowed_actions": null,
+        "capability_targets": {},
+        "max_wall_seconds_cap": null,
+        "max_output_bytes_cap": null
       },
       "pending": null,
-      "source": "context/rotation-successor.json",
-      "mutation": "value: previous_manifest_digest replaced with 'sha256:' + 'ab'*32 (broken digest link)"
+      "source": "source/rotation-successor-source.json",
+      "mutation": "value: previous_manifest_digest replaced with 'sha256:' + 'ab'*32 (broken digest link) relative to the accepted rotation-successor-source fixture"
     },
     {
       "id": "N14",
@@ -625,13 +886,23 @@
       "sha256": "c9ce0665403b8f1e72ad12483a0d442c45460bc68e2cb3de434c88b406afb4ad",
       "size_bytes": 1398,
       "now": "2026-01-01T00:00:00Z",
+      "pinned_at": "2026-01-01T00:00:00Z",
       "trust_chain": [
         "context/issuer-manifest.json"
       ],
       "local_node_id": "urn:faw:conformance-executor-0001",
       "local_policy": {
         "clock_skew_seconds": 60,
-        "reject_stale": false
+        "reject_stale": false,
+        "can_enforce_tokens": true,
+        "can_enforce_cost": false,
+        "allowed_external_effects": [
+          "none"
+        ],
+        "allowed_actions": null,
+        "capability_targets": {},
+        "max_wall_seconds_cap": null,
+        "max_output_bytes_cap": null
       },
       "pending": null,
       "source": "source/delegation-source.json",
@@ -646,13 +917,23 @@
       "sha256": "d8c62dd6e011882ed21472872027937d1f3d025c93aae0089d3310bd8aa88219",
       "size_bytes": 1242,
       "now": "2026-01-01T00:00:00Z",
+      "pinned_at": "2026-01-01T00:00:00Z",
       "trust_chain": [
         "context/executor-manifest.json"
       ],
       "local_node_id": null,
       "local_policy": {
         "clock_skew_seconds": 60,
-        "reject_stale": false
+        "reject_stale": false,
+        "can_enforce_tokens": true,
+        "can_enforce_cost": false,
+        "allowed_external_effects": [
+          "none"
+        ],
+        "allowed_actions": null,
+        "capability_targets": {},
+        "max_wall_seconds_cap": null,
+        "max_output_bytes_cap": null
       },
       "pending": {
         "task_id": "40000000-0000-4000-8000-000000000001",

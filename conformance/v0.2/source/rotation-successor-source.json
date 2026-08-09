@@ -1,0 +1,51 @@
+{
+  "kind": "faw-node-manifest",
+  "spec_version": "0.2",
+  "id": "10000000-0000-4000-8000-000000000005",
+  "issued_at": "2026-01-02T00:00:00Z",
+  "issuer": {
+    "node_id": "urn:faw:conformance-rotation-0001",
+    "kid": "sha256:eb4caae319bdcd70a1c0a28f2b9a4b655c8b6f8f411b5d8734afa549b841280d"
+  },
+  "body": {
+    "node_id": "urn:faw:conformance-rotation-0001",
+    "display_name": "conformance fixture node",
+    "manifest_sequence": 2,
+    "previous_manifest_digest": "sha256:ab20e5c125cbfa03e3a98859b41f5749b4e89e1a9e9f848c30e814ff71d390e9",
+    "manifest_freshness_window_seconds": 3600,
+    "capabilities": [
+      "hash_file"
+    ],
+    "endpoints": [],
+    "keys": [
+      {
+        "kid": "sha256:eb4caae319bdcd70a1c0a28f2b9a4b655c8b6f8f411b5d8734afa549b841280d",
+        "alg": "Ed25519",
+        "public_key": "NDgsQf0OhUCTUENrK99m4VAGgjlCPuhH75-60zSvd6s",
+        "status": "retired",
+        "valid_from": "2026-01-01T00:00:00Z",
+        "valid_until": "2026-01-02T00:00:00Z"
+      },
+      {
+        "kid": "sha256:0f58abfcd4c047f59ea2bf102df4bf180a3fd866f2d6c5487ea1e215cee94f1c",
+        "alg": "Ed25519",
+        "public_key": "WT6QOSZHkbvTWIX2OF0NpJIPQ73EeWuEG3psUF7Ih_I",
+        "status": "active",
+        "valid_from": "2026-01-02T00:00:00Z"
+      }
+    ],
+    "authorization_policy": {
+      "default_deny": true,
+      "required_grants": []
+    },
+    "cost_class": {
+      "tier": "free"
+    },
+    "rate_limits": {},
+    "status": "active"
+  },
+  "signature": {
+    "alg": "Ed25519",
+    "value": "dQydwGua5Pxpuvkz8ewDi_-fCdQfdwvP4Xd2gxRje85O6DL8WyrIXEAXYB5tXt0q09cm1nMARnzOiJPphUuJBA"
+  }
+}

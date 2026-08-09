@@ -17,7 +17,28 @@ and the raw fixture bytes alone; no Python sources or tests are required.
 9. delegations: replay/authority/budget admission (local policy).
 
 `expect` is `accept` (category null) or `reject` (exact `expected_category`).
-`now`, `local_node_id`, `local_policy`, and `pending` are verification inputs
-recorded per fixture. Byte identity is machine-checkable via `files[].sha256`
-and `size_bytes`. All keys are TEST-ONLY (`context/test-only-keys.json`); they
-grant no authority and are never used outside this package.
+`now`, `pinned_at`, `local_node_id`, `local_policy`, and `pending` are
+verification inputs recorded per fixture.
+
+## Trust freshness (language-neutral)
+
+The ordered `trust_chain` array supplies the pinned manifests. Head = the
+last manifest; `head_sequence` = `head.body.manifest_sequence`; `head_digest`
+= `sha256:<hex>` of JCS(head without the top-level signature). Freshness is
+`pinned_at` + `head.body.manifest_freshness_window_seconds` > `now` (fresh)
+or stale; `pinned_at` is explicit per fixture and never chosen by the
+consumer. A stale context may be rejected or returned qualified by local
+policy, never silently accepted.
+
+## Local policy (language-neutral)
+
+`local_policy` encodes every admission-policy input required to reproduce
+verification: `clock_skew_seconds`, `reject_stale`, `can_enforce_tokens`,
+`can_enforce_cost`, `allowed_external_effects`, `allowed_actions`,
+`capability_targets`, `max_wall_seconds_cap`, `max_output_bytes_cap`.
+Consumers construct their policy from these values alone; no implicit
+defaults are assumed.
+
+Byte identity is machine-checkable via `files[].sha256` and `size_bytes`.
+All keys are TEST-ONLY (`context/test-only-keys.json`); they grant no
+authority and are never used outside this package.
