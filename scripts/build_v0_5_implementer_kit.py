@@ -15,9 +15,10 @@ Guarantees:
   interop/v0.2/INPUT_MANIFEST.json;
 - manifest structure validated strictly (required keys, unknown members
   rejected, fixed allowlist, classification set, normalized paths);
-- every existing file under schemas/ and vectors/ must be listed; every
-  required fixed file (including LICENSE) must be listed; omission is a
-  build failure;
+- every existing file under conformance/v0.2/, schemas/ and vectors/ must
+  be listed (including conformance/v0.2/manifest.json); every required
+  fixed file (including LICENSE) must be listed; omission is a build
+  failure;
 - only listed files plus the manifest itself enter the archive;
 - deterministic tar.gz: sorted members, POSIX separators, uid/gid zero,
   empty owner/group names, fixed permissions, mtime zero, gzip mtime zero;
@@ -58,12 +59,17 @@ SOURCE_REPOSITORY = "kimeisele/federated-agent-web"
 FIXED_ALLOWED = {
     "SPEC.md",
     "docs/federated-agent-web-build-spec-v0.2.md",
+    "docs/FAW_V0_2_INTEROPERABILITY_PROFILE.md",
     "SECURITY.md",
     "LICENSE",
     "docs/V0_5_IMPLEMENTER_BRIEF.md",
     MANIFEST_RELPATH,
 }
-ALLOWED_DIRS = ("schemas", "vectors")
+# Every existing file under these directories must be listed in the
+# manifest (conformance/v0.2/ completeness includes the package's own
+# manifest.json — the package manifest's self-hash limitation applies only
+# to its internal files map, never to this outer manifest).
+ALLOWED_DIRS = ("conformance", "schemas", "vectors")
 ALLOWED_CLASSIFICATIONS = {
     "normative",
     "normative-summary",
@@ -276,7 +282,9 @@ def load_and_validate_manifest(root: Path) -> dict:
 
 def check_allowlist_complete(root: Path, manifest: dict) -> None:
     """Every required fixed file must be listed; every existing file under
-    schemas/ and vectors/ must be listed. Nothing may be silently extra."""
+    conformance/v0.2/, schemas/ and vectors/ must be listed (including the
+    conformance package's own manifest.json). Nothing may be silently
+    extra."""
     listed = {e["path"] for e in manifest["files"]}
     for fixed in sorted(FIXED_ALLOWED - {MANIFEST_RELPATH}):
         if fixed not in listed:

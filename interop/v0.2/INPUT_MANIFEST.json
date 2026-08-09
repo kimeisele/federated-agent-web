@@ -23,11 +23,256 @@
       "size_bytes": 9199
     },
     {
+      "classification": "conformance-fixture",
+      "path": "conformance/v0.2/README.md",
+      "reason": "Language-neutral conformance fixture package (N01-N15, P01-P05) with per-fixture records; v0.5 cross-language material.",
+      "sha256": "b3d91840275555d1249cc0d74a997101dbb9686b5afd346db578c7f2d32e4760",
+      "size_bytes": 2372
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "conformance/v0.2/context/executor-manifest.json",
+      "reason": "Language-neutral conformance fixture package (N01-N15, P01-P05) with per-fixture records; v0.5 cross-language material.",
+      "sha256": "9c550b9e4bb350bb1a2a35a3501c33a5cbe07b2179a96ec5ea13139648b1516e",
+      "size_bytes": 1228
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "conformance/v0.2/context/issuer-manifest.json",
+      "reason": "Language-neutral conformance fixture package (N01-N15, P01-P05) with per-fixture records; v0.5 cross-language material.",
+      "sha256": "af106aa7b86463b57567640ad3029275033c23dc6e46a9ed336106398b0b43ca",
+      "size_bytes": 1224
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "conformance/v0.2/context/key-boundary-manifest.json",
+      "reason": "Language-neutral conformance fixture package (N01-N15, P01-P05) with per-fixture records; v0.5 cross-language material.",
+      "sha256": "d1b86e4af580d074c315b13a71d578c296389f6fc78dd596043dfcc67732d822",
+      "size_bytes": 1275
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "conformance/v0.2/context/local-node.json",
+      "reason": "Language-neutral conformance fixture package (N01-N15, P01-P05) with per-fixture records; v0.5 cross-language material.",
+      "sha256": "091f10adbc82c7ccda7920b0464a1178aefcf1bb9a43c24903fd9878c7809eb8",
+      "size_bytes": 140
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "conformance/v0.2/context/pending.json",
+      "reason": "Language-neutral conformance fixture package (N01-N15, P01-P05) with per-fixture records; v0.5 cross-language material.",
+      "sha256": "f2cb95a425c21cabdcc30ccb640cff2602c22e1d22595903e734e3f138362d7c",
+      "size_bytes": 352
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "conformance/v0.2/context/rotation-genesis.json",
+      "reason": "Language-neutral conformance fixture package (N01-N15, P01-P05) with per-fixture records; v0.5 cross-language material.",
+      "sha256": "5ef0aa41e78ec122bfe4dd6e4abd02ae0076063fd932b360a4bdcc1b949c9ad2",
+      "size_bytes": 1228
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "conformance/v0.2/context/rotation-successor.json",
+      "reason": "Language-neutral conformance fixture package (N01-N15, P01-P05) with per-fixture records; v0.5 cross-language material.",
+      "sha256": "9215500b173445f465d2ca2822059931276a38d08d85c3481632a6efff863028",
+      "size_bytes": 1620
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "conformance/v0.2/context/test-only-keys.json",
+      "reason": "TEST-ONLY public fixture keys for deterministic conformance reproduction; grants no authority and is never a deployment identity.",
+      "sha256": "cddb20ff533080b17a96e3b3e1d8f6143349aca76ccd178b58371fd00f70777b",
+      "size_bytes": 1614
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "conformance/v0.2/manifest.json",
+      "reason": "Machine-readable conformance package manifest (byte identity + fixture records); listed and byte-hashed by this outer kit manifest.",
+      "sha256": "4c9f91ca7031f3d6d6713c0fdf9e4b7a66981e3f65d8613aa6580ae8c79d0e4d",
+      "size_bytes": 33479
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "conformance/v0.2/negative/N01.json",
+      "reason": "Language-neutral conformance fixture package (N01-N15, P01-P05) with per-fixture records; v0.5 cross-language material.",
+      "sha256": "1000ee2f91ce33b78f0eaa8d576d3647c45cb53fe091b5e6bcfc801c7eda7625",
+      "size_bytes": 1423
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "conformance/v0.2/negative/N02.json",
+      "reason": "Language-neutral conformance fixture package (N01-N15, P01-P05) with per-fixture records; v0.5 cross-language material.",
+      "sha256": "ea9d53791e1bd57dda732b32862611b9de25cc9506191ffd7be3c6fbe8ec0420",
+      "size_bytes": 699
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "conformance/v0.2/negative/N03.json",
+      "reason": "Language-neutral conformance fixture package (N01-N15, P01-P05) with per-fixture records; v0.5 cross-language material.",
+      "sha256": "9330bc8235f40984aa62ba9972c665089a3c0eca32c57b6a2e39cb7372a3ca67",
+      "size_bytes": 1398
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "conformance/v0.2/negative/N04.json",
+      "reason": "Language-neutral conformance fixture package (N01-N15, P01-P05) with per-fixture records; v0.5 cross-language material.",
+      "sha256": "e3e2b6ebb5b6451651f30724d1708a543389c28275a4ce2a9775f4ab192f97de",
+      "size_bytes": 1393
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "conformance/v0.2/negative/N05.json",
+      "reason": "Language-neutral conformance fixture package (N01-N15, P01-P05) with per-fixture records; v0.5 cross-language material.",
+      "sha256": "1064c2cd2212f3e1ed1f626ddf8eca1d0048ad901fe671b29eff9bfd94bf6a2b",
+      "size_bytes": 1402
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "conformance/v0.2/negative/N06.json",
+      "reason": "Language-neutral conformance fixture package (N01-N15, P01-P05) with per-fixture records; v0.5 cross-language material.",
+      "sha256": "1e194f1959c4065c61f25cd7ccb1016b00f4e52989b8d9d473c255423109641a",
+      "size_bytes": 1403
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "conformance/v0.2/negative/N07.json",
+      "reason": "Language-neutral conformance fixture package (N01-N15, P01-P05) with per-fixture records; v0.5 cross-language material.",
+      "sha256": "1fcedd8d5c6ae939178a922613d866235b4a1dc02ba2d4bfc79de3240acdec2e",
+      "size_bytes": 1423
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "conformance/v0.2/negative/N08.json",
+      "reason": "Language-neutral conformance fixture package (N01-N15, P01-P05) with per-fixture records; v0.5 cross-language material.",
+      "sha256": "d188b88be0612d28cc752af3d94bec8ad34dd023a76a28930d69cdbbc393f76f",
+      "size_bytes": 1398
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "conformance/v0.2/negative/N09.json",
+      "reason": "Language-neutral conformance fixture package (N01-N15, P01-P05) with per-fixture records; v0.5 cross-language material.",
+      "sha256": "d188b88be0612d28cc752af3d94bec8ad34dd023a76a28930d69cdbbc393f76f",
+      "size_bytes": 1398
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "conformance/v0.2/negative/N10.json",
+      "reason": "Language-neutral conformance fixture package (N01-N15, P01-P05) with per-fixture records; v0.5 cross-language material.",
+      "sha256": "899de4dcc91369fa3a3536fe2b66cc77e16db4f626a7691c8b182ffb5e01496f",
+      "size_bytes": 1394
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "conformance/v0.2/negative/N11.json",
+      "reason": "Language-neutral conformance fixture package (N01-N15, P01-P05) with per-fixture records; v0.5 cross-language material.",
+      "sha256": "760d5d312499055c745f5e4db2ff8830fa45ee596b55451aed96877f2046c086",
+      "size_bytes": 1405
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "conformance/v0.2/negative/N12.json",
+      "reason": "Language-neutral conformance fixture package (N01-N15, P01-P05) with per-fixture records; v0.5 cross-language material.",
+      "sha256": "11cfaa76aa29e19cbca4420e947e8d93106361621f56a072633d9e92b8ff2ef6",
+      "size_bytes": 1394
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "conformance/v0.2/negative/N13-broken-chain-link.json",
+      "reason": "Language-neutral conformance fixture package (N01-N15, P01-P05) with per-fixture records; v0.5 cross-language material.",
+      "sha256": "7734abe017ec5ec6ad553394e45aa8d51b44cab7c6f98cff2af947a08752accb",
+      "size_bytes": 1620
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "conformance/v0.2/negative/N14.json",
+      "reason": "Language-neutral conformance fixture package (N01-N15, P01-P05) with per-fixture records; v0.5 cross-language material.",
+      "sha256": "c9ce0665403b8f1e72ad12483a0d442c45460bc68e2cb3de434c88b406afb4ad",
+      "size_bytes": 1398
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "conformance/v0.2/negative/N15.json",
+      "reason": "Language-neutral conformance fixture package (N01-N15, P01-P05) with per-fixture records; v0.5 cross-language material.",
+      "sha256": "d8c62dd6e011882ed21472872027937d1f3d025c93aae0089d3310bd8aa88219",
+      "size_bytes": 1242
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "conformance/v0.2/positive/P01-number-max.json",
+      "reason": "Language-neutral conformance fixture package (N01-N15, P01-P05) with per-fixture records; v0.5 cross-language material.",
+      "sha256": "4ea7fc1c1a503856d43bcdb22f18063739354d7fbccd8ea533a9f829cb1108da",
+      "size_bytes": 1402
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "conformance/v0.2/positive/P02-number-min.json",
+      "reason": "Language-neutral conformance fixture package (N01-N15, P01-P05) with per-fixture records; v0.5 cross-language material.",
+      "sha256": "c90a45eec9bced314512cb08210c6726ecd8030cada8977accb9068e33cb9b31",
+      "size_bytes": 1403
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "conformance/v0.2/positive/P03-timestamp-fractions.json",
+      "reason": "Language-neutral conformance fixture package (N01-N15, P01-P05) with per-fixture records; v0.5 cross-language material.",
+      "sha256": "c39329a0a47a3762832d1c094777f6c8a251e0f381ed7f3a9c3993dca602b849",
+      "size_bytes": 1254
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "conformance/v0.2/positive/P04-issued-at-valid-from.json",
+      "reason": "Language-neutral conformance fixture package (N01-N15, P01-P05) with per-fixture records; v0.5 cross-language material.",
+      "sha256": "c9d9ce4ed9940ebabf8afe16166668d87e391befec409670c32bc8e2ef9a36ee",
+      "size_bytes": 1397
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "conformance/v0.2/positive/P05-uuidv7-time-mismatch.json",
+      "reason": "Language-neutral conformance fixture package (N01-N15, P01-P05) with per-fixture records; v0.5 cross-language material.",
+      "sha256": "e8a812db438419246213bc08d7494c760e754da7f46e30f838b9236996b2a8d3",
+      "size_bytes": 1393
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "conformance/v0.2/source/delegation-source.json",
+      "reason": "Language-neutral conformance fixture package (N01-N15, P01-P05) with per-fixture records; v0.5 cross-language material.",
+      "sha256": "d188b88be0612d28cc752af3d94bec8ad34dd023a76a28930d69cdbbc393f76f",
+      "size_bytes": 1398
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "conformance/v0.2/source/manifest-source.json",
+      "reason": "Language-neutral conformance fixture package (N01-N15, P01-P05) with per-fixture records; v0.5 cross-language material.",
+      "sha256": "af106aa7b86463b57567640ad3029275033c23dc6e46a9ed336106398b0b43ca",
+      "size_bytes": 1224
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "conformance/v0.2/source/receipt-source.json",
+      "reason": "Language-neutral conformance fixture package (N01-N15, P01-P05) with per-fixture records; v0.5 cross-language material.",
+      "sha256": "434a33c4e6416726ebed5b1f2e287be57eeb27aa4c5303fb44822884589cf4d3",
+      "size_bytes": 1242
+    },
+    {
+      "classification": "conformance-fixture",
+      "path": "conformance/v0.2/source/rotation-successor-source.json",
+      "reason": "Language-neutral conformance fixture package (N01-N15, P01-P05) with per-fixture records; v0.5 cross-language material.",
+      "sha256": "9215500b173445f465d2ca2822059931276a38d08d85c3481632a6efff863028",
+      "size_bytes": 1620
+    },
+    {
+      "classification": "normative",
+      "path": "docs/FAW_V0_2_INTEROPERABILITY_PROFILE.md",
+      "reason": "Interoperability profile; normative for v0.5 cross-language conformance only, clarifying previously unspecified v0.2 boundaries.",
+      "sha256": "17c6a5585ba1c5f63dff45a1783256a13db19308c488f519adf8a39798f0af48",
+      "size_bytes": 9139
+    },
+    {
       "classification": "non-normative-guidance",
       "path": "docs/V0_5_IMPLEMENTER_BRIEF.md",
       "reason": "Implementer scope, verification order, CLI and result-format contract; non-normative guidance.",
-      "sha256": "1047215332ab5708e4b9f9ee23b97ff4b96e73cb15122018f87f535376854948",
-      "size_bytes": 19542
+      "sha256": "f4ade76a97fa9b6aa220f65637ce8ad242d8be77b5790d2ac16adbf507fc0f66",
+      "size_bytes": 21678
     },
     {
       "classification": "normative",
@@ -228,6 +473,6 @@
   ],
   "format_version": 1,
   "generated_archive_name": "faw-v0.2-implementer-kit.tar.gz",
-  "reference_material_commit": "bb85221c894473adfd17dceb2c7d3685d9e266ea",
+  "reference_material_commit": "2d3edbc49192fd5910389c17c1653d0913fa6434",
   "source_repository": "kimeisele/federated-agent-web"
 }

@@ -24,8 +24,23 @@ import pytest
 ROOT = Path(__file__).resolve().parents[1]
 MANIFEST_PATH = ROOT / "interop" / "v0.2" / "INPUT_MANIFEST.json"
 BUILDER_PATH = ROOT / "scripts" / "build_v0_5_implementer_kit.py"
-EXPECTED_REFERENCE_COMMIT = "bb85221c894473adfd17dceb2c7d3685d9e266ea"
+EXPECTED_REFERENCE_COMMIT = "2d3edbc49192fd5910389c17c1653d0913fa6434"
 TEST_HEAD = "a" * 40
+
+# Refreshed-kit provenance pinned after the deterministic build (never
+# invented in advance): manifest files, archive members, archive size, and
+# the two external digests.
+EXPECTED_MANIFEST_FILES = 65
+EXPECTED_ARCHIVE_MEMBERS = 66
+EXPECTED_ARCHIVE_SIZE = 51895
+EXPECTED_MANIFEST_SHA256 = "54fc3c143b7f8a3b6fa5acb27a8c2b18458ddcba25819a40028b4dc51cb5bfe9"
+EXPECTED_ARCHIVE_SHA256 = "8b85eb211cba87308c402d27c404fb76fa13e3102c24eef97446f1413e18ef2e"
+
+# Sanctioned TEST-ONLY public fixture key files (exactly these two).
+TEST_ONLY_KEY_FILES = {
+    "vectors/signatures/keypair.json",
+    "conformance/v0.2/context/test-only-keys.json",
+}
 
 FORBIDDEN_PREFIXES = [
     "src/", "tests/", "examples/", ".github/", "scripts/", "pyproject.toml",
@@ -298,12 +313,108 @@ def test_reference_material_commit_is_recorded():
     assert MANIFEST["reference_material_commit"] != "source_commit"  # field renamed
 
 
-def test_every_schema_and_golden_vector_file_is_present():
+def test_every_schema_golden_vector_and_conformance_file_is_present():
     listed = {e["path"] for e in MANIFEST["files"]}
     expected = {str(p.relative_to(ROOT)) for p in sorted((ROOT / "schemas").rglob("*")) if p.is_file()}
     expected |= {str(p.relative_to(ROOT)) for p in sorted((ROOT / "vectors").rglob("*")) if p.is_file()}
+    expected |= {str(p.relative_to(ROOT)) for p in sorted((ROOT / "conformance" / "v0.2").rglob("*")) if p.is_file()}
     assert expected <= listed
     assert not (expected - listed)
+
+
+def test_conformance_package_manifest_is_listed_and_byte_exact():
+    """The outer kit manifest byte-hashes conformance/v0.2/manifest.json."""
+    rel = "conformance/v0.2/manifest.json"
+    entry = next(e for e in MANIFEST["files"] if e["path"] == rel)
+    content = (ROOT / rel).read_bytes()
+    assert len(content) == entry["size_bytes"]
+    assert hashlib.sha256(content).hexdigest() == entry["sha256"]
+
+
+def test_missing_conformance_file_fails_build(tmp_path):
+    root = _synthetic_root(tmp_path / "missing-conformance")
+    (root / "conformance/v0.2/negative/N15.json").unlink()
+    with pytest.raises(BUILDER.KitBuildError) as exc:
+        BUILDER.build(tmp_path / "out", root=root)
+    assert "N15.json" in str(exc.value)
+
+
+def test_extra_file_under_conformance_fails_build(tmp_path):
+    root = _synthetic_root(tmp_path / "extra-conformance")
+    (root / "conformance" / "v0.2" / "context").mkdir(parents=True, exist_ok=True)
+    (root / "conformance/v0.2/context/unmanifested.json").write_text("{}\n")
+    with pytest.raises(BUILDER.KitBuildError) as exc:
+        BUILDER.build(tmp_path / "out", root=root)
+    assert "unmanifested.json" in str(exc.value)
+
+
+def test_profile_is_a_required_fixed_kit_file(tmp_path):
+    listed = {e["path"] for e in MANIFEST["files"]}
+    assert "docs/FAW_V0_2_INTEROPERABILITY_PROFILE.md" in listed
+    entry = next(e for e in MANIFEST["files"] if e["path"] == "docs/FAW_V0_2_INTEROPERABILITY_PROFILE.md")
+    assert entry["classification"] == "normative"
+    root = _synthetic_root(tmp_path / "no-profile")
+    (root / "docs/FAW_V0_2_INTEROPERABILITY_PROFILE.md").unlink()
+    with pytest.raises(BUILDER.KitBuildError) as exc:
+        BUILDER.build(tmp_path / "out", root=root)
+    assert "FAW_V0_2_INTEROPERABILITY_PROFILE.md" in str(exc.value)
+
+
+# ---------------------------------------------------------------------------
+# TEST-ONLY key hygiene
+# ---------------------------------------------------------------------------
+
+def test_sanctioned_test_only_key_files_are_listed():
+    listed = {e["path"] for e in MANIFEST["files"]}
+    assert TEST_ONLY_KEY_FILES <= listed
+    for rel in TEST_ONLY_KEY_FILES:
+        entry = next(e for e in MANIFEST["files"] if e["path"] == rel)
+        assert entry["classification"] == "conformance-fixture", rel
+
+
+def test_no_other_kit_member_contains_private_key_material(archive_bytes):
+    """Only the two sanctioned TEST-ONLY files may carry private key data."""
+    with tarfile.open(fileobj=io.BytesIO(archive_bytes), mode="r:gz") as tar:
+        for member in tar.getmembers():
+            if not member.isfile():
+                continue
+            if member.name in TEST_ONLY_KEY_FILES:
+                continue
+            content = tar.extractfile(member).read()
+            assert b'"private_key"' not in content, f"private key material in {member.name}"
+            assert b"BEGIN PRIVATE KEY" not in content, f"private key material in {member.name}"
+
+
+def test_arbitrary_private_key_material_rejected(tmp_path):
+    """A manifest entry carrying private key material outside the two
+    sanctioned paths violates the allowlist and fails the build."""
+    root = _synthetic_root(tmp_path / "bad-key")
+    manifest_path = root / "interop/v0.2/INPUT_MANIFEST.json"
+    tampered = json.loads(manifest_path.read_text())
+    fake = {
+        "path": "private/deploy-key.json",
+        "sha256": hashlib.sha256(b'{"private_key": "x"}').hexdigest(),
+        "size_bytes": 17,
+        "classification": "conformance-fixture",
+        "reason": "tampered",
+    }
+    tampered["files"] = sorted(tampered["files"] + [fake], key=lambda e: e["path"])
+    manifest_path.write_text(json.dumps(tampered))
+    with pytest.raises(BUILDER.KitBuildError) as exc:
+        BUILDER.build(tmp_path / "out", root=root)
+    assert "outside allowlist" in str(exc.value)
+
+
+def test_extra_private_key_file_under_conformance_fails_build(tmp_path):
+    """Adding an arbitrary private-key-bearing file inside the conformance
+    directory is an unmanifested extra and fails completeness."""
+    root = _synthetic_root(tmp_path / "extra-key")
+    (root / "conformance/v0.2/context/deploy-keys.json").write_text(
+        '{"private_key": "not-allowed"}\n'
+    )
+    with pytest.raises(BUILDER.KitBuildError) as exc:
+        BUILDER.build(tmp_path / "out", root=root)
+    assert "deploy-keys.json" in str(exc.value)
 
 
 def test_manifest_does_not_list_itself(tmp_path):
@@ -388,3 +499,24 @@ def test_no_network_or_subprocess_is_required(tmp_path):
     result = BUILDER.build(tmp_path / "offline")
     assert Path(result["archive_path"]).is_file()
     assert result["file_count"] == len(MANIFEST["files"]) + 1
+
+
+# ---------------------------------------------------------------------------
+# Refreshed-kit provenance (pinned after the deterministic build)
+# ---------------------------------------------------------------------------
+
+def test_refreshed_kit_counts_and_digests_are_pinned():
+    assert len(MANIFEST["files"]) == EXPECTED_MANIFEST_FILES
+    manifest_bytes = MANIFEST_PATH.read_bytes()
+    assert hashlib.sha256(manifest_bytes).hexdigest() == EXPECTED_MANIFEST_SHA256
+
+
+def test_refreshed_archive_measurements_are_pinned(tmp_path):
+    result = BUILDER.build(tmp_path / "pinned")
+    assert result["reference_material_commit"] == EXPECTED_REFERENCE_COMMIT
+    assert result["manifest_sha256"] == EXPECTED_MANIFEST_SHA256
+    assert result["archive_sha256"] == EXPECTED_ARCHIVE_SHA256
+    assert result["archive_size_bytes"] == EXPECTED_ARCHIVE_SIZE
+    assert result["file_count"] == EXPECTED_ARCHIVE_MEMBERS
+    names = _member_names(Path(result["archive_path"]).read_bytes())
+    assert len(names) == EXPECTED_ARCHIVE_MEMBERS

@@ -8,12 +8,13 @@ behind `interop/v0.2/INPUT_MANIFEST.json` and
 The frozen reference-material commit is:
 
 ```text
-bb85221c894473adfd17dceb2c7d3685d9e266ea
+2d3edbc49192fd5910389c17c1653d0913fa6434
 ```
 
 It identifies the commit from which the normative specification, schemas,
-security guidance, and Golden Vector material were selected. It does not
-claim that every kit-administration file existed at that commit.
+security guidance, the interoperability profile, and the Golden Vector and
+conformance-package material were selected. It does not claim that every
+kit-administration file existed at that commit.
 
 ## 1. Purpose
 
@@ -30,7 +31,9 @@ The kit may contain only these paths:
 ```text
 SPEC.md
 docs/federated-agent-web-build-spec-v0.2.md
+docs/FAW_V0_2_INTEROPERABILITY_PROFILE.md
 schemas/**
+conformance/v0.2/**
 vectors/**
 SECURITY.md
 LICENSE
@@ -49,8 +52,10 @@ from packaging metadata during kit construction.
 | Path | Classification | Reason |
 |---|---|---|
 | `docs/federated-agent-web-build-spec-v0.2.md` | normative (governing) | source of normative requirements; where it conflicts with any summary, it wins |
+| `docs/FAW_V0_2_INTEROPERABILITY_PROFILE.md` | normative (cross-language) | normative for v0.5 cross-language conformance only; clarifies previously unspecified v0.2 boundaries without changing wire format, schemas, protocol version, signature input, or transport |
 | `SPEC.md` | normative summary | condensed contract; conflicts lose to the governing specification |
 | `schemas/**` | normative (machine-readable) | JSON Schema constraints for the three normative document kinds |
+| `conformance/v0.2/**` | conformance fixtures | language-neutral positive/negative vector package (N01–N15, P01–P05) with per-fixture records, `pinned_at`/freshness rule, language-neutral `local_policy`, and semantic pending context; byte identity machine-checkable via its own `manifest.json` |
 | `vectors/**` | conformance fixtures | static golden data: canonical bytes, digests, key material, signed documents |
 | `LICENSE` | license | terms governing copying, modification and redistribution of the kit materials |
 | `SECURITY.md` | non-normative guidance | disclosure and hygiene policy; no normative document semantics |
@@ -91,14 +96,19 @@ It must also exclude, by construction:
 - Git history and `.git/`;
 - local absolute or relative paths (including `..` traversal);
 - credentials of any kind;
-- private keys other than fixtures explicitly labelled TEST-ONLY in the
-  published Golden Vectors.
+- private keys other than the two sanctioned TEST-ONLY public fixture
+  files, exactly:
+  - `vectors/signatures/keypair.json` (existing);
+  - `conformance/v0.2/context/test-only-keys.json` (added with the
+    conformance package).
 
-The TEST-ONLY vector key material (`vectors/signatures/keypair.json` and the
-manifest key entries under `vectors/delegations/` and `vectors/receipts/`)
-is public fixture material. It is published so an independent implementer can
-reproduce signatures. It is not a deployment identity, grants no authority,
-and must never be used outside tests.
+Both sanctioned files are public TEST-ONLY reproducibility fixtures only:
+they grant no authority, are never deployment identities, and are never
+production credentials. They are published so an independent implementer
+can reproduce signatures and conformance fixtures deterministically. All
+other private/deployment key material remains forbidden; the machine checks
+prove the allowlist is exactly these two files and that no other kit member
+containing private key material is accepted.
 
 ## 5. Forbidden implementation paths
 
@@ -117,7 +127,10 @@ The future second implementation must not live inside
 - every listed file is allowlisted;
 - every listed file is a regular non-symlink file;
 - every listed file matches its exact byte size and SHA-256;
-- every existing file under `schemas/` and `vectors/` is listed;
+- every existing file under `conformance/v0.2/`, `schemas/` and `vectors/`
+  is listed, including `conformance/v0.2/manifest.json` (the package
+  manifest's inability to hash itself applies only to its own internal
+  `files` map);
 - every required fixed file, including `LICENSE`, is listed;
 - only listed files plus the manifest enter the archive;
 - the completed archive is scanned again for unsafe or forbidden members;
