@@ -24,6 +24,7 @@ from .pending import PendingDelegationStore
 from .replay import ReplayStore
 from .evidence import verify_evidence_bundle
 from .runner import run_once as _runner_run_once
+from .conformance_runner import run_conformance as _run_conformance
 from .verify import PinnedManifestTrustContext, VerificationPolicy, verify
 
 __all__ = ["main"]
@@ -281,9 +282,38 @@ def build_parser() -> argparse.ArgumentParser:
     return parser
 
 
-def main(argv: list[str] | None = None) -> int:
-    parser = build_parser()
+def _run_conformance_harness(argv: list[str]) -> int:
+    """Handle ``faw conformance run --harness "<cmd>"``.
+
+    This is a separate small parser reached only through the pre-parse
+    compatibility dispatcher in ``main()``; the legacy leaf command
+    ``faw conformance <node_path_or_url>`` is left untouched.
+    """
+    parser = argparse.ArgumentParser(
+        prog="faw conformance run",
+        description="Run a language-neutral conformance harness over P01-P05/N01-N15.",
+    )
+    parser.add_argument(
+        "--harness",
+        required=True,
+        help='harness command line, e.g. "python -m federated_agent_web.harness" '
+        "(parsed with shlex; executed without a shell)",
+    )
+    parser.add_argument("--timeout", type=float, default=30.0, help="per-fixture timeout in seconds")
+    parser.add_argument("--manifest", default=None, help="conformance manifest path (default: repository conformance/v0.2/manifest.json)")
     args = parser.parse_args(argv)
+    return _run_conformance(args.harness, manifest_path=args.manifest, timeout=args.timeout)
+
+
+def main(argv: list[str] | None = None) -> int:
+    args_list = list(sys.argv[1:] if argv is None else argv)
+    # Small pre-parse compatibility dispatcher: the legacy ``faw conformance
+    # <node_path_or_url>`` leaf command stays untouched; only an exact
+    # leading ``conformance run`` is routed to the harness runner.
+    if len(args_list) >= 2 and args_list[0] == "conformance" and args_list[1] == "run":
+        return _run_conformance_harness(args_list[2:])
+    parser = build_parser()
+    args = parser.parse_args(args_list)
     return int(args.func(args))
 
 
