@@ -97,6 +97,30 @@ def _check_identity(path: Path, expected_sha256: str, expected_size: int) -> Non
         )
 
 
+def _check_referenced_identity(
+    record: dict[str, Any], conf_dir: Path, manifest_files: dict[str, Any]
+) -> None:
+    """Verify byte identity for the fixture document and EVERY trust-chain
+    file referenced by the record, before any harness request is built.
+
+    ``manifest["files"]`` is the authoritative SHA-256/size source for
+    referenced context files. Any missing/unreadable/mismatched reference is
+    a HARNESS OPERATIONAL FAILURE and the harness is never invoked.
+    """
+    _check_identity(conf_dir / record["bytes"], record["sha256"], record["size_bytes"])
+    for chain_path in record.get("trust_chain") or []:
+        entry = manifest_files.get(chain_path)
+        if entry is None:
+            raise HarnessOperationalFailure(
+                f"trust-chain file {chain_path!r} absent from manifest files map"
+            )
+        _check_identity(
+            conf_dir / chain_path,
+            entry["sha256"],
+            entry["size_bytes"],
+        )
+
+
 def build_request(record: dict[str, Any], conf_dir: Path) -> dict[str, Any]:
     """Construct a non-leaking inline request for one fixture record.
 
@@ -212,11 +236,7 @@ def collect_results(
             "expected_category": record.get("expected_category"),
         }
         try:
-            _check_identity(
-                conf_dir / record["bytes"],
-                record["sha256"],
-                record["size_bytes"],
-            )
+            _check_referenced_identity(record, conf_dir, manifest.get("files") or {})
             request = build_request(record, conf_dir)
             proc = subprocess.run(
                 argv,

@@ -55,6 +55,22 @@ STABLE_CATEGORIES = frozenset(
 EXPECTED_KINDS = {KIND_DELEGATION, KIND_MANIFEST, KIND_RECEIPT}
 PENDING_FIELDS = ("task_id", "attempt_id", "delegation_digest", "executor_node_id", "status")
 
+# The complete language-neutral local_policy contract: all nine fields are
+# required and must be present with the documented types. Consumers
+# construct their policy from these values alone, with no implicit defaults
+# and no permissive coercions.
+POLICY_FIELDS = (
+    "clock_skew_seconds",
+    "reject_stale",
+    "can_enforce_tokens",
+    "can_enforce_cost",
+    "allowed_external_effects",
+    "allowed_actions",
+    "capability_targets",
+    "max_wall_seconds_cap",
+    "max_output_bytes_cap",
+)
+
 
 class HarnessOperationalError(Exception):
     """Operational/harness failure (exit non-zero; never a protocol reject)."""
@@ -164,18 +180,48 @@ def _decode_b64(value: str, what: str) -> bytes:
 
 
 def _build_policy(local_policy: dict[str, Any]) -> VerificationPolicy:
-    allowed_actions = local_policy.get("allowed_actions")
-    effects = local_policy.get("allowed_external_effects")
+    missing = [field for field in POLICY_FIELDS if field not in local_policy]
+    if missing:
+        raise HarnessOperationalError(f"local_policy missing required fields: {missing}")
+
+    skew = local_policy["clock_skew_seconds"]
+    if isinstance(skew, bool) or not isinstance(skew, int):
+        raise HarnessOperationalError("clock_skew_seconds must be an integer")
+    for field in ("reject_stale", "can_enforce_tokens", "can_enforce_cost"):
+        if not isinstance(local_policy[field], bool):
+            raise HarnessOperationalError(f"{field} must be a boolean")
+
+    effects = local_policy["allowed_external_effects"]
+    if not isinstance(effects, list) or not all(isinstance(e, str) for e in effects):
+        raise HarnessOperationalError("allowed_external_effects must be an array of strings")
+
+    actions = local_policy["allowed_actions"]
+    if actions is not None and (
+        not isinstance(actions, list) or not all(isinstance(a, str) for a in actions)
+    ):
+        raise HarnessOperationalError("allowed_actions must be null or an array of strings")
+
+    targets = local_policy["capability_targets"]
+    if not isinstance(targets, dict) or not all(
+        isinstance(k, str) and isinstance(v, str) for k, v in targets.items()
+    ):
+        raise HarnessOperationalError("capability_targets must be an object mapping strings to strings")
+
+    for field in ("max_wall_seconds_cap", "max_output_bytes_cap"):
+        value = local_policy[field]
+        if value is not None and (isinstance(value, bool) or not isinstance(value, int)):
+            raise HarnessOperationalError(f"{field} must be an integer or null")
+
     return VerificationPolicy(
-        clock_skew_seconds=int(local_policy.get("clock_skew_seconds", 60)),
-        reject_stale=bool(local_policy.get("reject_stale", False)),
-        can_enforce_tokens=bool(local_policy.get("can_enforce_tokens", True)),
-        can_enforce_cost=bool(local_policy.get("can_enforce_cost", False)),
-        allowed_external_effects=frozenset(effects) if effects is not None else frozenset({"none"}),
-        allowed_actions=set(allowed_actions) if allowed_actions is not None else None,
-        capability_targets=dict(local_policy.get("capability_targets") or {}),
-        max_wall_seconds_cap=local_policy.get("max_wall_seconds_cap"),
-        max_output_bytes_cap=local_policy.get("max_output_bytes_cap"),
+        clock_skew_seconds=skew,
+        reject_stale=local_policy["reject_stale"],
+        can_enforce_tokens=local_policy["can_enforce_tokens"],
+        can_enforce_cost=local_policy["can_enforce_cost"],
+        allowed_external_effects=frozenset(effects),
+        allowed_actions=set(actions) if actions is not None else None,
+        capability_targets=dict(targets),
+        max_wall_seconds_cap=local_policy["max_wall_seconds_cap"],
+        max_output_bytes_cap=local_policy["max_output_bytes_cap"],
     )
 
 

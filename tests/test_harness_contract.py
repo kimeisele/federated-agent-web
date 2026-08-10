@@ -320,3 +320,145 @@ def test_conformance_run_cli() -> None:
     )
     assert proc.returncode == 0, proc.stdout + proc.stderr
     assert "20/20 fixtures passed" in proc.stdout
+
+
+# ---------------------------------------------------------------------------
+# Correction R1: trust-chain byte identity + strict local_policy
+# ---------------------------------------------------------------------------
+
+
+def _full_policy() -> dict:
+    return {
+        "clock_skew_seconds": 60,
+        "reject_stale": False,
+        "can_enforce_tokens": True,
+        "can_enforce_cost": False,
+        "allowed_external_effects": ["none"],
+        "allowed_actions": None,
+        "capability_targets": {},
+        "max_wall_seconds_cap": None,
+        "max_output_bytes_cap": None,
+    }
+
+
+def test_trust_chain_byte_identity_enforced(tmp_path) -> None:
+    """A mutated trust-chain manifest byte must be rejected as HARNESS
+    OPERATIONAL FAILURE before the harness is invoked, even though the
+    manifest's own hash metadata is unchanged."""
+    import hashlib
+
+    pkg = tmp_path / "pkg"
+    (pkg / "context").mkdir(parents=True)
+    doc = b'{"kind": "faw-delegation", "spec_version": "0.2"}'
+    trust = b'{"kind": "faw-node-manifest", "spec_version": "0.2"}'
+    (pkg / "doc.json").write_bytes(doc)
+    (pkg / "context" / "trust.json").write_bytes(trust)
+
+    def sha(data: bytes) -> str:
+        return hashlib.sha256(data).hexdigest()
+
+    manifest = {
+        "fixtures": [
+            {
+                "id": "N99",
+                "expect": "reject",
+                "expected_kind": "faw-delegation",
+                "expected_category": "signature.invalid",
+                "bytes": "doc.json",
+                "sha256": sha(doc),
+                "size_bytes": len(doc),
+                "now": "2026-01-01T00:00:00Z",
+                "pinned_at": "2026-01-01T00:00:00Z",
+                "trust_chain": ["context/trust.json"],
+                "local_node_id": None,
+                "local_policy": _full_policy(),
+                "pending": None,
+            }
+        ],
+        "files": {
+            "doc.json": {"sha256": sha(doc), "size_bytes": len(doc)},
+            "context/trust.json": {"sha256": sha(trust), "size_bytes": len(trust)},
+        },
+    }
+    (pkg / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+    # Mutate one byte of the referenced trust-chain manifest; the manifest's
+    # recorded hash metadata is preserved (the mutation is "invisible" to the
+    # manifest, so only runner-side byte verification can catch it).
+    mutated = bytearray(trust)
+    mutated[0] ^= 0x01
+    (pkg / "context" / "trust.json").write_bytes(bytes(mutated))
+
+    results = cr.collect_results(HARNESS_CMD, manifest_path=pkg / "manifest.json", fixture_ids=["N99"])
+    assert results[0]["failure"] == "HARNESS OPERATIONAL FAILURE"
+    assert "trust-chain" in results[0]["operational_error"] or "sha256" in results[0]["operational_error"]
+    # The harness must never have been treated as producing a result.
+    assert "actual_verdict" not in results[0]
+    assert "actual_category" not in results[0]
+
+
+def test_trust_chain_path_absent_from_files_map_is_operational(tmp_path) -> None:
+    import hashlib
+
+    pkg = tmp_path / "pkg2"
+    (pkg / "context").mkdir(parents=True)
+    doc = b"{}"
+    (pkg / "doc.json").write_bytes(doc)
+
+    manifest = {
+        "fixtures": [
+            {
+                "id": "N99",
+                "expect": "reject",
+                "expected_kind": "faw-delegation",
+                "expected_category": "signature.invalid",
+                "bytes": "doc.json",
+                "sha256": hashlib.sha256(doc).hexdigest(),
+                "size_bytes": len(doc),
+                "now": "2026-01-01T00:00:00Z",
+                "pinned_at": "2026-01-01T00:00:00Z",
+                "trust_chain": ["context/unlisted.json"],
+                "local_node_id": None,
+                "local_policy": _full_policy(),
+                "pending": None,
+            }
+        ],
+        "files": {"doc.json": {"sha256": hashlib.sha256(doc).hexdigest(), "size_bytes": len(doc)}},
+    }
+    (pkg / "manifest.json").write_text(json.dumps(manifest), encoding="utf-8")
+
+    results = cr.collect_results(HARNESS_CMD, manifest_path=pkg / "manifest.json", fixture_ids=["N99"])
+    assert results[0]["failure"] == "HARNESS OPERATIONAL FAILURE"
+    assert "absent from manifest files map" in results[0]["operational_error"]
+    assert "actual_verdict" not in results[0]
+
+
+def test_local_policy_missing_field_is_operational_failure() -> None:
+    request = _request_for("P01")
+    del request["local_policy"]["can_enforce_cost"]
+    proc = _run_harness(request)
+    assert proc.returncode != 0
+    assert proc.stdout.strip() == b""
+
+
+def test_local_policy_string_bool_is_operational_failure() -> None:
+    request = _request_for("P01")
+    request["local_policy"]["reject_stale"] = "false"  # must not coerce to False
+    proc = _run_harness(request)
+    assert proc.returncode != 0
+    assert proc.stdout.strip() == b""
+
+
+def test_local_policy_malformed_capability_targets_is_operational_failure() -> None:
+    request = _request_for("P01")
+    request["local_policy"]["capability_targets"] = [1, 2]
+    proc = _run_harness(request)
+    assert proc.returncode != 0
+    assert proc.stdout.strip() == b""
+
+
+def test_local_policy_bool_as_integer_is_operational_failure() -> None:
+    request = _request_for("P01")
+    request["local_policy"]["max_wall_seconds_cap"] = True  # bool is not an integer here
+    proc = _run_harness(request)
+    assert proc.returncode != 0

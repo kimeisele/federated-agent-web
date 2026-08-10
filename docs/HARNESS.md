@@ -192,14 +192,17 @@ file and pass the script.
 `faw conformance run --harness "<cmd>"` (with optional `--timeout` and
 `--manifest`) drives any conforming harness over P01–P05 and N01–N15 from
 the committed `conformance/v0.2/manifest.json` (runner-side truth). For each
-fixture the runner verifies referenced fixture byte identity (SHA-256 and
-size from the manifest), builds a non-leaking inline request with an opaque
-`request_id`, invokes the harness, validates the result envelope and
-invariants, and compares the verdict/category against the manifest
-expectation. Failures are distinguished as `CONFORMANCE FAILURE` (valid
-result contradicting the manifest) vs `HARNESS OPERATIONAL FAILURE`
-(malformed result, invariant violation, timeout, non-zero exit, invalid
-envelope). Expected answer data stays runner-side only.
+fixture the runner verifies byte identity of the referenced fixture document
+AND every referenced trust-chain file (SHA-256 and size from the manifest's
+`files` map; any missing/unreadable/mismatched reference is a HARNESS
+OPERATIONAL FAILURE and the harness is never invoked), builds a non-leaking
+inline request with an opaque `request_id`, invokes the harness, validates
+the result envelope and invariants, and compares the verdict/category
+against the manifest expectation. Failures are distinguished as
+`CONFORMANCE FAILURE` (valid result contradicting the manifest) vs
+`HARNESS OPERATIONAL FAILURE` (malformed result, invariant violation,
+timeout, non-zero exit, invalid envelope, unverified byte context). Expected
+answer data stays runner-side only.
 
 ## Reference harness
 
