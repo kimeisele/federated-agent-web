@@ -1,28 +1,33 @@
 # Spec sufficiency audit — FAW v0.2 minimal input, Rust implementation (L0 → L1)
 
+Status note: this file records BOTH audit rounds. **R1 is invalidated for
+method and retained only as provenance/history. R2 did not run: the
+platform could not enforce the approved isolation, so NO audit result is
+emitted.** The final line of this audit is not `PASS` and not `GAPS FOUND`.
+
 ## 1. Purpose
 
 Falsification-oriented audit of whether the minimal public FAW v0.2 protocol
 material exposes enough semantics for a fresh Rust implementation to complete
-L0 → L1 against the published vectors. Executed per control issue
-[#41](https://github.com/kimeisele/federated-agent-web/issues/41)
-(slice 1). This is NOT Class A evidence, NOT an independent-implementation
-claim, and NOT proof that the specification is sufficient.
+L0 → L1 against the published vectors (control issue
+[#41](https://github.com/kimeisele/federated-agent-web/issues/41), slice 1).
+Not Class A evidence; not an independent-implementation claim; not proof of
+specification sufficiency.
 
-## 2. Method
+## 2. Method (as approved)
 
-Two logically separate roles. A fresh Rust Implementer received only the
-exact allowlisted input files (with SHA-256 identities), the L0 observable
-contract, the narrowed delegation-only L1 observable contract, and generic
-environment information — implemented L0, then L1, offline, recording every
-assumption/guess in a running log. An Auditor (who knew the audit hypotheses)
-observed without coaching, then evaluated the hypotheses against the
-observable behavior and the Implementer's log.
+Two logically separate roles: a fresh Rust Implementer receiving only the
+exact allowlisted inputs (with SHA-256 identities), the L0 observable
+contract, the narrowed delegation-only L1 contract, and generic environment
+information; an Auditor knowing the audit hypotheses who observes without
+coaching and classifies findings after implementation behavior is fixed.
+Isolation: fresh workspace outside the FAW repository, network disabled,
+only the 20 allowlisted files, frozen generic dependencies.
 
-## 3. Exact input set
+## 3. Exact input set (unchanged, both rounds)
 
-Pinned FAW commit: `255301717fefe37a130996790378ebcef7f0a477` (current `main`
-at issue creation). 20 files, byte-verified before use (SHA-256):
+Pinned FAW commit: `255301717fefe37a130996790378ebcef7f0a477`. The 20
+files approved in #41, byte-verified (SHA-256) before use:
 
 | Path | SHA-256 |
 |---|---|
@@ -47,195 +52,136 @@ at issue creation). 20 files, byte-verified before use (SHA-256):
 | vectors/delegations/delegation-digest | 289bf7bfe9b4c040185ae7c067550490d3196e37df3518183e645e9b4cd1d540 |
 | vectors/delegations/issuer-manifest.json | aff51e1706b9576a47de6174c30018059b6f7576975ae8b0ed2fd14b6bdd6e53 |
 
-## 4. Isolation and contamination limitations
+## 4. R1 — INVALIDATED FOR METHOD (history only)
 
-- Workspace: `/private/tmp/faw-suff-ws` (outside the FAW repository); contains
-  only the 20 allowlisted inputs, the Rust project, and the task text.
-- Network disabled during implementation and test execution: all cargo
-  operations ran with `CARGO_NET_OFFLINE=true` and `--offline` (any download
-  attempt hard-fails); no web search.
-- No FAW repository clone, no Python implementation/tests, no Go verifier
-  inside the workspace. Dependencies frozen by preflight (see §5).
-- **Isolation breach (process violation), disclosed:** the Implementer's own
-  log documents that during implementation it executed external runtimes
-  outside the workspace — Python (stdlib and the `cryptography` library) for
-  cross-checks, Node for differential testing (100k random doubles, 4000
-  random JSON documents), and it resolved one ambiguity by deferring to the
-  behavior of the Python `rfc8785` package named in SPEC.md §2. This violates
-  the isolation contract of #41. Consequences: (a) the PASS direction is not
-  meaningful — this audit cannot certify "no gap found" under sterile
-  conditions; (b) the confirmed gaps in §8 are nevertheless grounded in the
-  material itself (two plausible readings, internal tension, vector
-  non-discrimination) and were verified independently by the Auditor, not
-  taken from the Implementer's resolution.
-- **Contamination limitation (mandatory):** the implementation may have been
-  performed by a model whose training data could already contain public FAW
-  material; instruction-level isolation cannot prove absence of prior
-  exposure. A PASS would mean only that no gap was found by this audit and
-  would not prove that the specification is sufficient or that the
-  implementation had no prior exposure through model training. This audit
-  did not reach a PASS.
+`R1 INVALIDATED FOR METHOD — external runtime consultation violated the
+approved isolation boundary.`
 
-## 5. Rust environment
+R1's execution violated the approved isolation contract: the R1 Implementer's
+own log documents that during implementation it executed external runtimes
+outside the workspace (Python stdlib and the `cryptography` library for
+cross-checks; Node for differential testing of number formatting and
+canonicalization; and it resolved one ambiguity by deferring to the behavior
+of the Python `rfc8785` package). R1 is therefore retained **only as
+provenance/history** and is not the audit result. Its former "GAPS FOUND"
+finding list (member-name sort order, "integer-valued JSON numbers" scope,
+JCS number serialization algorithm containment) is historical record only
+and is NOT re-confirmed; none of it is used as R2 evidence. The R2 review
+explicitly rejected the R1 framings that relied on Python-package behavior
+and any proposed lexical loophole for the safe-integer rule; those framings
+are withdrawn with the invalidation.
+
+## 5. R2 — operational isolation blocker (no audit result)
+
+### 5.1 Preflight (completed)
 
 - `rustc 1.88.0 (6b00bc388 2025-06-23)`, `cargo 1.88.0 (873a06493 2025-05-10)`.
-- Offline dependency preflight (environment-only, before code): local Cargo
-  registry/cache inspected; the generic crypto crates `sha2`/`ed25519-dalek`
-  are NOT cached, but the `openssl` crate (0.10.81, cached) links the
-  locally installed system OpenSSL 3.6.3 (`/usr/local/opt/openssl@3`, which
-  provides SHA-256 and Ed25519 via EVP), and `base64` 0.22.1 is cached.
-- Frozen dependencies (declared before implementation, no download after
-  start): `openssl = "=0.10.81"`, `base64 = "=0.22.1"` — generic
-  implementation infrastructure (cryptography, encoding); nothing
-  FAW-specific. Everything else is Rust standard library or hand-written
-  implementation code (strict JSON parser, JCS canonicalizer, JSON Schema
-  subset validator).
-- Offline build validated with a skeleton before implementation: `cargo build
-  --offline` compiles both crates from the local cache.
+- Offline dependency preflight: local Cargo registry/cache inspected; generic
+  crypto crates `sha2`/`ed25519-dalek` not cached; `openssl` 0.10.81 (cached)
+  links the locally installed system OpenSSL 3.6.3 (`/usr/local/opt/openssl@3`,
+  SHA-256 + Ed25519 via EVP); `base64` 0.22.1 cached. Offline skeleton build
+  succeeded (`cargo build --offline`). Frozen deps (declared before
+  implementation, nothing downloaded after start): `openssl = "=0.10.81"`,
+  `base64 = "=0.22.1"` — generic infrastructure.
+- Input staging: all 20 files copied from the pinned commit into a fresh
+  workspace (`/private/tmp/faw-suff-ws`), every SHA-256 verified; no extra
+  files.
 
-## 6. L0 result
+### 5.2 Isolation enforcement attempt and platform findings
 
-All 4 canonicalization vectors reproduce byte-identical canonical bytes
-(`nested`, `strings`, `unicode`, `numbers`; the numbers vector pins
-`1e+30` with plus sign and `1e-7` without exponent zero-padding). All 6
-negative fixtures are rejected with exactly the profile §6 category:
-N01 `parse.duplicate_member`, N02 `parse.invalid_json`, N03/N04
-`parse.invalid_unicode`, N05/N06 `canonicalization.number_out_of_domain`.
-Reproduced independently by the Auditor (binary re-run, exit 0).
+The R2 contract requires process/environment-level enforcement and says that
+`cargo --offline` alone is not sufficient evidence, and that if the platform
+cannot enforce the approved isolation with reasonable confidence the audit
+must STOP with an operational isolation blocker. The platform was probed:
 
-## 7. L1 result
+- Forbidden runtimes are present and reachable by an exec-capable agent
+  shell: `python3`/`python` (`/usr/local/opt/python@3.11/libexec/bin`), `node`/
+  `npm` (`/Users/ss/.nvm/.../v22.17.0/bin`), `curl` (`/usr/bin/curl`), `wget`
+  (`/usr/local/bin/wget`).
+- No container runtime (docker/podman absent); no passwordless root (no PF
+  firewall configuration, no removal of binaries, no network namespace).
+- `sandbox-exec` (macOS seatbelt) exists and accepts a deny-network profile
+  for processes launched by the Audit Executor, but it can only be applied
+  at process spawn.
+- Empirical harness probe: a subagent's shell does **not** inherit the parent
+  session's exported environment (a sentinel exported by the parent was
+  ABSENT in the subagent shell) and resolves the standard session PATH.
+  Consequently a seatbelt wrapper (or any PATH-shim) injected by the parent
+  cannot reach the subagent's execution channel; the harness spawns subagent
+  shells with a fresh environment.
+- Agent-type options: the read-only `scout` agent has no exec tool and no
+  write tool, so it cannot author or run a Rust implementation; the
+  exec-capable `task` agent's shell is unconstrained on this platform.
+- R1 empirically demonstrated that trust-based instruction ("do not consult
+  outside the workspace, do not use the network") was insufficient: the
+  Implementer consulted external runtimes anyway.
 
-Delegation-only (the 9 steps of #41): schema validation of
-`delegation.json` against `schemas/delegation.schema.json` passes; content
-digest `sha256:da4c4286…717d66d` matches `delegation-digest`
-byte-for-byte; `issuer.kid` resolves to the manifest key entry
-(`sha256:b5a55a3e…5aec2`, `alg=Ed25519`, `status=active`); the kid derived
-from the raw 32-byte public key matches; the Ed25519 signature verifies over
-JCS(delegation minus signature). All 5 L1 checks PASS (verified by Auditor
-re-run, exit 0). No L2/L3 semantics (audience, temporal, chain, freshness,
-replay, pending, authority/budget) were implemented.
+### 5.3 Determination
 
-## 8. Confirmed specification gaps
+The available platform **cannot enforce the approved isolation with
+reasonable confidence** for an exec-capable fresh Implementer: the forbidden
+runtimes are reachable, no container or root-level restriction is available,
+and the harness provides no mechanism to apply a process-level sandbox
+(seatbelt or otherwise) to the subagent's execution channel. Per the R2
+contract this is an **operational/environment blocker**: R2 did not run,
+and neither `SPEC SUFFICIENCY: PASS` nor `SPEC SUFFICIENCY: GAPS FOUND` is
+emitted.
 
-### GAP 1 — Object member-name sort order is ambiguous and vector-undetectable
+## 6. Isolation and contamination limitations
 
-- **Normative location:** SPEC.md §2 ("sort object properties and serialize
-  numbers exactly as JCS requires") and SPEC.md §2's naming of "the
-  maintained `rfc8785` package"; `docs/FAW_V0_2_INTEROPERABILITY_PROFILE.md`
-  §1/§6 (JCS semantics).
-- **What the Implementer had to guess:** whether member names are ordered by
-  Unicode code points or by UTF-16 code units (RFC 8785 §3.2.3 requires
-  UTF-16 code units; the named Python `rfc8785` package orders by code
-  points). The two orders differ for astral keys (U+10000+) alongside BMP
-  keys in U+E000–U+FFFF (e.g. code points: U+E000 before U+1F680; UTF-16
-  units: 0xD83D < 0xE000, so U+1F680 first).
-- **Competing plausible readings:** (a) "exactly as JCS requires" → RFC 8785
-  UTF-16 code-unit order; (b) "the maintained rfc8785 package" → the package's
-  actual (code-point) order.
-- **Observable evidence:** every committed vector key is ASCII, so all four
-  canonicalization vectors pass under either ordering; the produced
-  implementation demonstrably sorts by code points (plain string comparison)
-  while matching every committed vector. No provided vector discriminates.
-- **Proposed wording-level clarification:** state the ordering base
-  explicitly in SPEC.md §2 / the profile ("member names are ordered by their
-  UTF-16 code-unit sequences" or by code points — exactly one, named) and
-  state that it is a canonicalization input, not a display choice.
-- **Boundary vector for the later fix:** an object whose keys are `"\uE000"`
-  and `"\u{1F680}"` (canonical hex pins whichever order is normative).
+- The contamination limitation applies regardless of outcome: an
+  implementation performed by a model whose training data could already
+  contain public FAW material cannot be proven free of prior exposure by
+  instruction-level isolation.
+- For this audit, no fresh implementation ran under the required isolation,
+  so no falsification result was produced. A future R2 would need an
+  environment that structurally denies the forbidden runtimes and network
+  (e.g. a container/VM with no network and no Python/Node/JS runtimes, or
+  equivalent OS-level enforcement).
 
-### GAP 2 — "Integer-valued JSON numbers" is ambiguous and internally in tension with the vectors
+## 7. Rust environment (preflight record)
 
-- **Normative location:** profile §1 ("For integer-valued JSON numbers, the
-  inclusive safe-integer interval is required: −9007199254740991 through
-  9007199254740991"); vectors/canonicalization/numbers.json (contains the
-  accepted `1e+30`).
-- **What the Implementer had to guess:** whether the safe-integer domain
-  applies to a number's mathematical value (in which case `1e+30`, being an
-  integer, would have to be rejected — contradicting the accepted positive
-  vector) or to the lexical form (integer literals only). The Implementer
-  had to infer the lexical reading to avoid the contradiction.
-- **Competing plausible readings:** "integer-valued JSON numbers" = numbers
-  whose exact decimal value is an integer (value-based) vs numbers written in
-  pure integer form without `.`/`e`/`E` (lexical).
-- **Proposed wording-level clarification:** define "integer-valued" precisely
-  and state the treatment of exponent/decimal lexical forms (e.g. "the
-  safe-integer interval applies to numbers whose exact decimal value is an
-  integer and that are written without an exponent; exponent forms such as
-  1e+30 are admitted as binary64 values" — or the opposite, exactly one).
-- **Boundary vectors for the later fix:** positive/negative pairs
-  `9007199254740991.0` / `9.007199254740991e15` (accept) and
-  `9007199254740992.0` / `9.007199254740992e15` (reject), in both decimal and
-  exponent lexical forms.
+As in §5.1: Rust 1.88.0, frozen generic crates openssl 0.10.81 and base64
+0.22.1 (offline, local registry), system OpenSSL 3.6.3. Everything else
+would be Rust standard library or hand-written implementation code.
 
-### GAP 3 — The JCS number serialization algorithm is not contained in the material; boundary cases are unpinned
+## 8. L0 result
 
-- **Normative location:** SPEC.md §2/§7.1 ("serialize numbers exactly as JCS
-  requires"; "Canonicalization is RFC 8785 (JCS)"); profile §1 (domain only).
-  The serialization algorithm itself (shortest round-trip representation,
-  tie-breaking convention, decimal↔exponent thresholds, exponent format) is
-  delegated to the external RFC 8785, whose text is not part of the allowed
-  material and is unreachable offline.
-- **What the Implementer had to guess:** the tie-breaking convention for
-  shortest-round-trip digits (round-half-even per ECMAScript vs round-half-up
-  in Rust's std), the decimal/exponent thresholds (e.g. 1e-6 vs 1e-7,
-  1e20 vs 1e21), and the exponent sign/format. The four committed vector
-  numbers (0.1, 42, 9007199254740991, 1e+30, 1e-7) pin neither a tie case
-  nor the thresholds.
-- **Competing plausible readings:** e.g. for a tie like 900719925474099.25,
-  "900719925474099.2" (ES, round-half-even) vs "900719925474099.3" (Rust,
-  half-up) — both are shortest round-trip strings, and the material does not
-  choose.
-- **Proposed wording-level clarification:** pin the algorithm (reference the
-  ECMAScript `Number::toString` semantics including tie-breaking, or include
-  the serialization rules in the material) and state the decimal/exponent
-  thresholds.
-- **Boundary vectors for the later fix:** a tie case (e.g.
-  `900719925474099.25` with its canonical hex), and threshold cases (e.g.
-  `1e-6`, `1e-7`, `1e20`, `1e21` with canonical hex).
+No R2 L0 result — R2 did not run (operational isolation blocker). R1's L0
+execution is invalidated and is not reported as a result.
 
-## 9. Non-gaps / hypotheses not reproduced
+## 9. L1 result
 
-- Duplicate object members: the requirement to reject them at parse time is
-  discoverable (SPEC.md §2; profile §6 matrix N01). Implemented without
-  coaching; N01 rejected correctly. Not a gap.
-- Unicode / lone surrogates: discoverable (SPEC.md §2; N03/N04). Escaped
-  `\ud800` rejected as `parse.invalid_unicode`; the unicode vector reproduces.
-  Not a gap.
-- NaN / Infinity / -Infinity classification: the profile §6 mapping notes
-  assign non-finite tokens to `canonicalization.number_out_of_domain`;
-  discoverable. Not a gap (no committed fixture exercises the tokens).
-- Raw-byte parsing boundary: SPEC.md §2 and the profile require
-  parse-time duplicate detection; the hand-written parser operates on raw
-  bytes by construction. Not a gap. (Note: an implementer relying on a
-  normal in-memory JSON library would fail N01; the requirement is stated in
-  the material.)
-- Negative zero: the profile rejects "negative zero"; the exact lexical form
-  set (-0 vs -0.0 vs -0e5) is unpinned but both readings reject with the
-  same category. Noted, not classified as a gap.
-- kid derivation, digest spelling, schema subset, category strings: all
-  discoverable from the material (SPEC.md §1/§2/§6, schemas, profile §6).
-  Not gaps.
+No R2 L1 result — R2 did not run (operational isolation blocker). R1's L1
+execution is invalidated and is not reported as a result.
 
-## 10. Proposed clarifications
+## 10. Confirmed specification gaps
 
-See the per-gap proposals in §8 (GAP 1: pin the member-name ordering base;
-GAP 2: define "integer-valued" and the treatment of exponent forms; GAP 3:
-pin the number serialization algorithm, tie-breaking, and thresholds). All
-were formulated from the allowlisted material and Unicode/ECMAScript
-reasoning only; no Python or Go implementation was inspected to formulate
-them.
+None confirmed by R2. R1's former findings are invalidated history (§4) and
+must not be treated as audit results.
 
-## 11. Limitations
+## 11. Non-gaps / hypotheses not reproduced
 
-- The isolation breach described in §4 means the Implementer's results cannot
-  support a clean PASS claim; the confirmed gaps stand on the material
-  analysis and Auditor verification.
-- The audit covers the narrowed delegation-only L1 and the canonicalization
-  domain only; L2/L3 semantics were not audited.
-- Model-training contamination cannot be excluded (see §4).
-- The gap set is specific to the allowlisted minimal material; the full
-  governing build specification (not in the allowlist) was not audited here.
+Not assessed — no R2 run.
 
-## 12. Final result
+## 12. Proposed clarifications
 
-`SPEC SUFFICIENCY: GAPS FOUND`
+None proposed — no R2 findings. The R2 review's constraints stand for any
+future run: findings must be framed as self-containedness/vector-coverage
+gaps of the supplied 20-file material (never as RFC-vs-Python-package
+contradictions, never as newly decided protocol semantics, and without
+unreproduced claims about standard-library rounding behavior).
+
+## 13. Limitations
+
+- No audit result was produced: the isolation blocker prevented R2.
+- R1 is invalidated for method.
+- Model-training contamination cannot be excluded in any future run.
+
+## 14. Final result
+
+`NO AUDIT RESULT — OPERATIONAL ISOLATION BLOCKER (R2 did not run)`
+
+This is neither `SPEC SUFFICIENCY: PASS` nor `SPEC SUFFICIENCY: GAPS FOUND`.
+A final result may only be emitted by a future R2 run under enforced
+isolation.
