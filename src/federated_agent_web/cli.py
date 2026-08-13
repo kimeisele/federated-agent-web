@@ -24,6 +24,7 @@ from .pending import PendingDelegationStore
 from .replay import ReplayStore
 from .evidence import verify_evidence_bundle
 from .runner import run_once as _runner_run_once
+from .transports import GhCliMailboxClient, GitHubNadiRelayBackend, NadiTransport
 from .conformance_runner import run_conformance as _run_conformance
 from .verify import PinnedManifestTrustContext, VerificationPolicy, verify
 
@@ -187,6 +188,27 @@ def _cmd_conformance(args: argparse.Namespace) -> int:
 
 def _cmd_node_run_once(args: argparse.Namespace) -> int:
     """Run the one-shot node worker — process at most one envelope."""
+    transport = None
+    if args.transport == "nadi-github":
+        try:
+            identity = NodeIdentity.load(Path(args.identity))
+            routes = _parse_nadi_routes(args.nadi_route)
+            if not args.nadi_relay_address:
+                raise ValueError("--nadi-relay-address is required for nadi-github")
+            if not args.nadi_hub_repo:
+                raise ValueError("--nadi-hub-repo is required for nadi-github")
+            client = GhCliMailboxClient(args.nadi_hub_repo)
+            backend = GitHubNadiRelayBackend(args.nadi_hub_repo, client)
+            transport = NadiTransport(
+                state_root=Path(args.transport_root),
+                node_id=identity.node_id,
+                relay_address=args.nadi_relay_address,
+                routes=routes,
+                backend=backend,
+            )
+        except (OSError, ValueError) as exc:
+            print(f"node transport: FAILED: {exc}")
+            return 2
     return _runner_run_once(
         identity_dir=Path(args.identity),
         trust_dir=Path(args.trust),
@@ -194,7 +216,23 @@ def _cmd_node_run_once(args: argparse.Namespace) -> int:
         state_dir=Path(args.state_dir),
         work_dir=Path(args.work_dir),
         role=args.role,
+        transport=transport,
     )
+
+
+def _parse_nadi_routes(values: list[str] | None) -> dict[str, str]:
+    """Parse repeatable ``FAW_NODE_ID=RELAY_ADDRESS`` route arguments."""
+    routes: dict[str, str] = {}
+    for value in values or []:
+        node_id, separator, relay_address = value.partition("=")
+        if not separator or not node_id or not relay_address:
+            raise ValueError(
+                "--nadi-route must be FAW_NODE_ID=RELAY_ADDRESS"
+            )
+        if node_id in routes:
+            raise ValueError(f"duplicate --nadi-route for {node_id}")
+        routes[node_id] = relay_address
+    return routes
 
 
 def _cmd_evidence_verify(args: argparse.Namespace) -> int:
@@ -263,7 +301,32 @@ def build_parser() -> argparse.ArgumentParser:
     ro = sub2.add_parser("run-once", help="process at most one inbound envelope and exit")
     ro.add_argument("--identity", required=True, help="persisted node directory")
     ro.add_argument("--trust", required=True, help="trusted peer node directory")
-    ro.add_argument("--transport-root", required=True, help="shared transport root directory")
+    ro.add_argument(
+        "--transport-root",
+        required=True,
+        help="transport state root (shared inbox root for filesystem; local durable state for Nadi)",
+    )
+    ro.add_argument(
+        "--transport",
+        choices=["filesystem", "nadi-github"],
+        default="filesystem",
+        help="delivery adapter (default: filesystem)",
+    )
+    ro.add_argument(
+        "--nadi-relay-address",
+        help="this node's Nadi relay address (nadi-github only)",
+    )
+    ro.add_argument(
+        "--nadi-hub-repo",
+        help="GitHub relay repository as owner/repository (nadi-github only)",
+    )
+    ro.add_argument(
+        "--nadi-route",
+        action="append",
+        default=[],
+        metavar="FAW_NODE_ID=RELAY_ADDRESS",
+        help="peer route; repeat once per destination (nadi-github only)",
+    )
     ro.add_argument("--state-dir", required=True, help="persistent state directory")
     ro.add_argument("--work-dir", required=True, help="scratch work directory")
     ro.add_argument("--role", required=True, choices=["executor", "issuer"], help="node role")
