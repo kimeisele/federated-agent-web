@@ -83,6 +83,26 @@ faw node run-once \
   --role issuer
 ```
 
+The same one-shot runner can use the experimental Nadi/GitHub adapter without
+changing FAW documents, verification, replay, execution, or receipts:
+
+```bash
+faw node run-once \
+  --identity ./executor --trust ./issuer \
+  --transport nadi-github \
+  --transport-root ./state/nadi-transport \
+  --nadi-hub-repo owner/relay-repository \
+  --nadi-relay-address executor-mailbox \
+  --nadi-route urn:faw:issuer-node=issuer-mailbox \
+  --state-dir ./state/executor --work-dir ./work/executor \
+  --role executor
+```
+
+`--nadi-route` maps signed FAW identities to untrusted relay addresses and is
+repeatable. GitHub credentials come from the caller's existing `gh` login; do
+not put credentials in routes or FAW documents. See
+[`docs/ADAPTER_NADI.md`](docs/ADAPTER_NADI.md) for the trust boundary.
+
 Each invocation processes at most one inbound envelope and exits. State is
 persisted across restarts (replay store, pending-delegation store).
 `hash_file` is the only executable capability. No daemon, no HTTP server,

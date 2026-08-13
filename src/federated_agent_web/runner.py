@@ -1,6 +1,6 @@
 """One-shot node runner — restart-safe operational slice (§3).
 
-``NodeRunner`` uses the existing ``FilesystemTransport``, ``ReplayStore``,
+``NodeRunner`` uses the transport contract, ``ReplayStore``,
 ``PendingDelegationStore``, ``PinnedManifestTrustContext``, ``VerificationPolicy``,
 ``verify()``, and ``CapabilityExecutor``. It processes at most one inbound
 envelope per invocation and exits. No endless loop, no service, no daemon.
@@ -23,7 +23,7 @@ from .documents import KIND_DELEGATION, KIND_RECEIPT, content_digest_of, now_utc
 from .identity import NodeIdentity, validate_manifest_chain
 from .pending import PendingDelegationStore
 from .replay import ReplayStore
-from .transports import FilesystemTransport
+from .transports import FilesystemTransport, Transport
 from .verify import (
     PinnedManifestTrustContext,
     VerificationPolicy,
@@ -66,7 +66,7 @@ class NodeRunner:
         self,
         identity: NodeIdentity,
         trust_context: PinnedManifestTrustContext,
-        transport: FilesystemTransport,
+        transport: Transport,
         state_dir: Path,
         work_dir: Path,
         *,
@@ -232,6 +232,7 @@ def run_once(
     state_dir: Path,
     work_dir: Path,
     role: str,
+    transport: Transport | None = None,
 ) -> int:
     """Load identity and trust context, then process one envelope.
 
@@ -240,7 +241,8 @@ def run_once(
     """
     identity = NodeIdentity.load(identity_dir)
     trust_context = _load_peer_trust(trust_dir)
-    transport = FilesystemTransport(transport_root, identity.node_id)
+    if transport is None:
+        transport = FilesystemTransport(transport_root, identity.node_id)
     runner = NodeRunner(
         identity=identity,
         trust_context=trust_context,
