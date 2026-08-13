@@ -230,6 +230,8 @@ def run_once(
     work_dir: Path,
     role: str,
     transport: Transport | None = None,
+    execution_registry: ExecutionRegistry | None = None,
+    execution_policy: VerificationPolicy | None = None,
 ) -> int:
     """Load identity and trust context, then process one envelope.
 
@@ -247,5 +249,7 @@ def run_once(
         state_dir=state_dir,
         work_dir=work_dir,
         role=role,
+        execution_registry=execution_registry,
+        execution_policy=execution_policy,
     )
     return runner.run_once()

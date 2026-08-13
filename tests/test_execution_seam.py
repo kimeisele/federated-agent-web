@@ -9,6 +9,7 @@ from federated_agent_web.execution import (
     RuntimeResult,
     receipt_from_result,
 )
+from federated_agent_web import runner as runner_module
 from federated_agent_web.runner import NodeRunner
 from federated_agent_web.pending import PendingDelegationStore
 from federated_agent_web.transports.base import (
@@ -161,3 +162,31 @@ def test_registry_unknown_capability_has_no_fallback(issuer, executor, tmp_path)
         assert "no executor registered" in str(exc)
     else:
         raise AssertionError("unknown capability unexpectedly executed")
+
+
+def test_run_once_wrapper_forwards_registry_and_policy(tmp_path, issuer, executor, monkeypatch):
+    issuer_dir, executor_dir = tmp_path / "issuer", tmp_path / "executor"
+    issuer.to_json(issuer_dir)
+    executor.to_json(executor_dir)
+    stub = StubExecutor()
+    registry = ExecutionRegistry({"custom.echo": stub})
+    policy = VerificationPolicy(allowed_actions={"custom.echo"})
+    captured = {}
+
+    def fake_run_once(self):
+        captured["registry"] = self.execution_registry
+        captured["policy"] = self.policy
+        return 0
+
+    monkeypatch.setattr(NodeRunner, "run_once", fake_run_once)
+    assert runner_module.run_once(
+        identity_dir=executor_dir,
+        trust_dir=issuer_dir,
+        transport_root=tmp_path / "transport",
+        state_dir=tmp_path / "state",
+        work_dir=tmp_path / "work",
+        role="executor",
+        execution_registry=registry,
+        execution_policy=policy,
+    ) == 0
+    assert captured == {"registry": registry, "policy": policy}
