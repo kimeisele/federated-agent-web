@@ -16,10 +16,13 @@ from pathlib import Path
 from typing import Any
 
 from . import canonical
-import uuid as _uuid
-
-from .demo import CapabilityExecutor
-from .documents import KIND_DELEGATION, KIND_RECEIPT, content_digest_of, now_utc_z
+from .documents import KIND_DELEGATION, KIND_RECEIPT
+from .execution import (
+    ExecutionRegistry,
+    RuntimeResult,
+    default_execution_registry,
+    receipt_from_result,
+)
 from .identity import NodeIdentity, validate_manifest_chain
 from .pending import PendingDelegationStore
 from .replay import ReplayStore
@@ -71,6 +74,8 @@ class NodeRunner:
         work_dir: Path,
         *,
         role: str,
+        execution_registry: ExecutionRegistry | None = None,
+        execution_policy: VerificationPolicy | None = None,
     ) -> None:
         self.identity = identity
         self.trust_context = trust_context
@@ -80,8 +85,9 @@ class NodeRunner:
         self.role = role
         self.replay = ReplayStore(self.state_dir / "replay")
         self.pending = PendingDelegationStore(self.state_dir / "pending")
-        self.policy = VerificationPolicy(
-            allowed_actions={"hash_file"},
+        self.execution_registry = execution_registry or default_execution_registry(identity)
+        self.policy = execution_policy or VerificationPolicy(
+            allowed_actions=set(self.execution_registry.capabilities),
             allowed_external_effects=frozenset({"none"}),
         )
 
@@ -157,27 +163,18 @@ class NodeRunner:
             self.replay.mark_executing(record)
 
         # Execute the capability.
-        executor = CapabilityExecutor(self.identity)
         try:
-            receipt = executor.execute(delegation, self.work_dir)
+            runtime_result = self.execution_registry.execute(delegation, self.work_dir)
         except Exception as exc:  # noqa: BLE001
             print(f"error: capability failed: {exc}")
-            receipt = self.identity.sign_document(
-                KIND_RECEIPT,
-                {
-                    "receipt_id": str(_uuid.uuid4()),
-                    "task_id": body["task_id"],
-                    "attempt_id": attempt_id,
-                    "delegation_digest": delegation_digest,
-                    "executor_node_id": self.identity.node_id,
-                    "status": "failed",
-                    "started_at": now_utc_z(),
-                    "finished_at": now_utc_z(),
-                    "artifacts": [],
-                    "usage": {},
-                    "failure": {"code": "runner.error", "message": str(exc)[:2048]},
-                },
+            failed_at = datetime.now(timezone.utc)
+            runtime_result = RuntimeResult(
+                status="failed",
+                started_at=failed_at,
+                finished_at=failed_at,
+                failure={"code": "runner.error", "message": str(exc)[:2048]},
             )
+        receipt = receipt_from_result(self.identity, delegation, runtime_result)
 
         # Persist terminal receipt BEFORE transport delivery.
         if record is not None:
@@ -233,6 +230,8 @@ def run_once(
     work_dir: Path,
     role: str,
     transport: Transport | None = None,
+    execution_registry: ExecutionRegistry | None = None,
+    execution_policy: VerificationPolicy | None = None,
 ) -> int:
     """Load identity and trust context, then process one envelope.
 
@@ -250,5 +249,7 @@ def run_once(
         state_dir=state_dir,
         work_dir=work_dir,
         role=role,
+        execution_registry=execution_registry,
+        execution_policy=execution_policy,
     )
     return runner.run_once()

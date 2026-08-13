@@ -10,13 +10,12 @@ No network access is used. Exits non-zero if any invariant fails.
 
 from __future__ import annotations
 
-import json
 import sys
 import time
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
-from typing import Any, Callable
+from typing import Callable
 
 from . import canonical
 from .canonical import digest_bytes
@@ -24,8 +23,8 @@ from .documents import (
     KIND_DELEGATION,
     KIND_RECEIPT,
     content_digest_of,
-    now_utc_z,
 )
+from .execution import default_execution_registry, receipt_from_result
 from .identity import NodeIdentity
 from .pending import PendingDelegationStore
 from .replay import ReplayStore
@@ -54,88 +53,11 @@ class CapabilityExecutor:
         self.node = node
         self.now_fn = now_fn or (lambda: datetime.now(timezone.utc))
 
-    def execute(self, delegation: dict[str, Any], workdir: Path) -> dict[str, Any]:
-        body = delegation["body"]
-        delegation_digest = content_digest_of(delegation)
-        task_id, attempt_id = body["task_id"], body["attempt_id"]
-        deadline = datetime.fromisoformat(body["deadline"].replace("Z", "+00:00"))
-        started = self.now_fn()
-        if started > deadline:
-            return self._receipt(body, delegation_digest, "timed_out", started, started, usage={}, failure=None)
-        input_refs = body["input"].get("refs", [])
-        if not input_refs:
-            raise ValueError("hash_file capability requires refs input")
-        location = Path(input_refs[0]["location"])
-        read_paths = [Path(p).resolve() for p in body["authority"].get("filesystem_scope", {}).get("read_paths", [])]
-        if read_paths and location.resolve() not in read_paths:
-            raise ValueError(f"input {location} outside declared filesystem read scope")
-        data = location.read_bytes()
-        actual_digest = digest_bytes(data)
-        if actual_digest != input_refs[0]["digest"]:
-            raise ValueError(f"input digest mismatch: {actual_digest} != {input_refs[0]['digest']}")
-        result = {
-            "capability": CAPABILITY,
-            "task_id": task_id,
-            "attempt_id": attempt_id,
-            "input": str(location),
-            "input_digest": actual_digest,
-            "input_size": len(data),
-            "executor": self.node.node_id,
-        }
-        artifact = json.dumps(result, indent=2).encode("utf-8")
-        artifact_path = workdir / "artifacts" / f"{task_id}-{attempt_id}.json"
-        artifact_path.parent.mkdir(parents=True, exist_ok=True)
-        artifact_path.write_bytes(artifact)
-        finished = self.now_fn()
-        usage = {
-            "wall_seconds": max(0.0, (finished - started).total_seconds()),
-            "output_bytes": len(artifact),
-        }
-        receipt = self._receipt(
-            body,
-            delegation_digest,
-            "succeeded",
-            started,
-            finished,
-            usage=usage,
-            failure=None,
-            artifacts=[{
-                "name": "result.json",
-                "media_type": "application/json",
-                "digest": digest_bytes(artifact),
-                "size": len(artifact),
-                "location": str(artifact_path),
-            }],
+    def execute(self, delegation: dict, workdir: Path) -> dict:
+        result = default_execution_registry(self.node, now_fn=self.now_fn).execute(
+            delegation, workdir
         )
-        return receipt
-
-    def _receipt(
-        self,
-        body: dict[str, Any],
-        delegation_digest: str,
-        status: str,
-        started: datetime,
-        finished: datetime,
-        *,
-        usage: dict[str, Any],
-        failure: dict[str, Any] | None,
-        artifacts: list[dict[str, Any]] | None = None,
-    ) -> dict[str, Any]:
-        receipt_body: dict[str, Any] = {
-            "receipt_id": str(uuid.uuid4()),
-            "task_id": body["task_id"],
-            "attempt_id": body["attempt_id"],
-            "delegation_digest": delegation_digest,
-            "executor_node_id": self.node.node_id,
-            "status": status,
-            "started_at": _ts(started),
-            "finished_at": _ts(finished),
-            "artifacts": artifacts or [],
-            "usage": usage,
-        }
-        if failure is not None:
-            receipt_body["failure"] = failure
-        return self.node.sign_document(KIND_RECEIPT, receipt_body)
+        return receipt_from_result(self.node, delegation, result)
 
 
 # The executor needs the delegation digest for receipt binding; the demo passes
